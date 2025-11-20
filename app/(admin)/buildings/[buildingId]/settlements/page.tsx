@@ -1,0 +1,444 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import toast from "react-hot-toast";
+import { Table, THead, Th, TBody, Tr, Td } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+
+type ChargeRow = {
+  id: number;
+  unitId: number;
+  unitCode: string;
+  responsable: string;
+  previousBalance: number;
+  currentFee: number;
+  totalToPay: number;
+  status: string;
+};
+
+type SettlementSummary = {
+  id: number;
+  month: number;
+  year: number;
+  totalExpense: number;
+  dueDate1: string | null;
+  dueDate2: string | null;
+} | null;
+
+type AccountHistory = {
+  unit: { id: number; code: string; building: string; responsable: string | null };
+  periods: Array<{
+    settlementId: number;
+    month: number;
+    year: number;
+    previousBalance: number;
+    currentFee: number;
+    partialPaymentsTotal: number;
+    totalToPay: number;
+    status: string;
+    payments: Array<{
+      id: number;
+      amount: number;
+      receiptNumber: string;
+      paymentDate: string;
+      notes?: string | null;
+    }>;
+  }>;
+} | null;
+
+export default function SettlementsPage() {
+  const params = useParams<{ buildingId: string }>();
+  const buildingId = Number(params.buildingId);
+  const today = new Date();
+  const [month, setMonth] = useState(today.getMonth() + 1);
+  const [year, setYear] = useState(today.getFullYear());
+  const [settlement, setSettlement] = useState<SettlementSummary>(null);
+  const [charges, setCharges] = useState<ChargeRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState<{
+    totalExpense?: number;
+    collected?: number;
+    collectionRate?: number;
+  }>({});
+
+  const [openNew, setOpenNew] = useState(false);
+  const [newMonth, setNewMonth] = useState(today.getMonth() + 1);
+  const [newYear, setNewYear] = useState(today.getFullYear());
+  const [totalExpense, setTotalExpense] = useState("");
+  const [dueDate1, setDueDate1] = useState("");
+  const [dueDate2, setDueDate2] = useState("");
+
+  const [openPayment, setOpenPayment] = useState(false);
+  const [selectedCharge, setSelectedCharge] = useState<ChargeRow | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [receiptNumber, setReceiptNumber] = useState("");
+  const [paymentDate, setPaymentDate] = useState(today.toISOString().slice(0, 10));
+
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountData, setAccountData] = useState<AccountHistory>(null);
+
+  const loadData = async () => {
+    setLoading(true);
+    const res = await fetch(
+      `/api/buildings/${buildingId}/settlements?month=${month}&year=${year}`,
+    );
+    if (res.ok) {
+      const body = await res.json();
+      setSettlement(body.settlement);
+      setCharges(body.charges || []);
+      if (body.charges?.length) {
+        const totalExpense = body.settlement?.totalExpense ?? 0;
+        const collected =
+          body.charges.reduce(
+            (acc: number, c: any) =>
+              acc + (c.currentFee + c.previousBalance - c.totalToPay),
+            0,
+          ) ?? 0;
+        const collectionRate =
+          totalExpense > 0 ? Math.min(100, (collected / totalExpense) * 100) : 0;
+        setSummary({ totalExpense, collected, collectionRate });
+      } else {
+        setSummary({});
+      }
+    } else {
+      toast.error("No pudimos cargar la liquidación");
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [month, year, buildingId]);
+
+  const handleNewSettlement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const res = await fetch(`/api/buildings/${buildingId}/settlements`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        month: Number(newMonth),
+        year: Number(newYear),
+        totalExpense: Number(totalExpense),
+        dueDate1: dueDate1 || null,
+        dueDate2: dueDate2 || null,
+      }),
+    });
+    if (res.ok) {
+      toast.success("Liquidación creada");
+      setOpenNew(false);
+      setMonth(Number(newMonth));
+      setYear(Number(newYear));
+      loadData();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      toast.error(body.message ?? "Error al crear liquidación");
+    }
+  };
+
+  const openPayModal = (charge: ChargeRow) => {
+    setSelectedCharge(charge);
+    setPayAmount(charge.totalToPay.toString());
+    setReceiptNumber("");
+    setPaymentDate(today.toISOString().slice(0, 10));
+    setOpenPayment(true);
+  };
+
+  const handlePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCharge || !settlement) return;
+    const res = await fetch("/api/payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        settlementId: settlement.id,
+        unitId: selectedCharge.unitId,
+        amount: Number(payAmount),
+        receiptNumber,
+        paymentDate,
+      }),
+    });
+    if (res.ok) {
+      toast.success("Pago registrado");
+      setOpenPayment(false);
+      loadData();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      toast.error(body.message ?? "Error al registrar pago");
+    }
+  };
+
+  const handleAccountHistory = async (unitId: number) => {
+    const res = await fetch(`/api/units/${unitId}/account-history`);
+    if (res.ok) {
+      const body = await res.json();
+      setAccountData(body);
+      setAccountOpen(true);
+    } else {
+      toast.error("Error al obtener estado de cuenta");
+    }
+  };
+
+  const statusColor = (status: string) => {
+    if (status === "PAID") return "success";
+    if (status === "PARTIAL") return "warning";
+    return "danger";
+  };
+
+  const monthOptions = useMemo(() => Array.from({ length: 12 }, (_v, i) => i + 1), []);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">Liquidaciones</h2>
+          <p className="text-sm text-slate-500">Busca por mes y año.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+            value={month}
+            onChange={(e) => setMonth(Number(e.target.value))}
+          >
+            {monthOptions.map((m) => (
+              <option key={m} value={m}>
+                Mes {m}
+              </option>
+            ))}
+          </select>
+          <Input
+            label="Año"
+            type="number"
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="w-32"
+          />
+          <Button variant="secondary" onClick={loadData} disabled={loading}>
+            Aplicar
+          </Button>
+        </div>
+        <div className="flex-1" />
+        <Button onClick={() => setOpenNew(true)}>Nueva liquidación</Button>
+      </div>
+
+      {settlement && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm text-slate-500">Gasto total período</p>
+            <p className="text-2xl font-semibold">
+              ${summary.totalExpense?.toLocaleString("es-AR", { minimumFractionDigits: 2 }) ?? "0,00"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm text-slate-500">Cobrado</p>
+            <p className="text-2xl font-semibold">
+              ${summary.collected?.toLocaleString("es-AR", { minimumFractionDigits: 2 }) ?? "0,00"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-sm text-slate-500">% Cobranza</p>
+            <p className="text-2xl font-semibold">
+              {summary.collectionRate ? summary.collectionRate.toFixed(1) : "0"}%
+            </p>
+          </div>
+        </div>
+      )}
+
+      {settlement ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-500">
+                Período {settlement.month}/{settlement.year}
+              </p>
+              <p className="text-lg font-semibold text-slate-900">
+                Gasto total: ${settlement.totalExpense.toFixed(2)}
+              </p>
+              <p className="text-sm text-slate-500">
+                Vencimientos:{" "}
+                {settlement.dueDate1 ? new Date(settlement.dueDate1).toLocaleDateString("es-AR") : "N/A"}{" "}
+                ·{" "}
+                {settlement.dueDate2 ? new Date(settlement.dueDate2).toLocaleDateString("es-AR") : "N/A"}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+          No hay liquidación para {month}/{year}. Crea una para comenzar.
+        </div>
+      )}
+
+      {settlement && (
+        <Table>
+          <THead>
+            <tr>
+              <Th>Unidad</Th>
+              <Th>Responsable</Th>
+              <Th className="text-right">Saldo anterior</Th>
+              <Th className="text-right">Expensa actual</Th>
+              <Th className="text-right">Total a pagar</Th>
+              <Th>Estado</Th>
+              <Th>Acciones</Th>
+            </tr>
+          </THead>
+          <TBody>
+            {charges.length === 0 && (
+              <Tr>
+                <Td colSpan={7}>Sin cargos en esta liquidación.</Td>
+              </Tr>
+            )}
+            {charges.map((c) => (
+              <Tr key={c.id}>
+                <Td className="font-semibold">{c.unitCode}</Td>
+                <Td>{c.responsable}</Td>
+                <Td className="text-right">${c.previousBalance.toFixed(2)}</Td>
+                <Td className="text-right">${c.currentFee.toFixed(2)}</Td>
+                <Td className="text-right font-semibold">${c.totalToPay.toFixed(2)}</Td>
+                <Td>
+                  <Badge variant={statusColor(c.status)}>
+                    {c.status === "PENDING" && "Pendiente"}
+                    {c.status === "PARTIAL" && "Parcial"}
+                    {c.status === "PAID" && "Pagado"}
+                  </Badge>
+                </Td>
+                <Td className="space-x-2">
+                  <Button variant="secondary" onClick={() => openPayModal(c)}>
+                    Realizar pago
+                  </Button>
+                  <Button variant="ghost" onClick={() => handleAccountHistory(c.unitId)}>
+                    Ver estado
+                  </Button>
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      )}
+
+      <Modal open={openNew} onClose={() => setOpenNew(false)} title="Nueva liquidación">
+        <form className="space-y-4" onSubmit={handleNewSettlement}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-600">Mes</label>
+              <select
+                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                value={newMonth}
+                onChange={(e) => setNewMonth(Number(e.target.value))}
+              >
+                {monthOptions.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Input
+              label="Año"
+              type="number"
+              value={newYear}
+              onChange={(e) => setNewYear(Number(e.target.value))}
+              required
+            />
+            <Input
+              label="Gasto total del mes"
+              type="number"
+              min="0"
+              step="0.01"
+              value={totalExpense}
+              onChange={(e) => setTotalExpense(e.target.value)}
+              required
+            />
+            <Input
+              label="1er vencimiento"
+              type="date"
+              value={dueDate1}
+              onChange={(e) => setDueDate1(e.target.value)}
+            />
+            <Input
+              label="2do vencimiento"
+              type="date"
+              value={dueDate2}
+              onChange={(e) => setDueDate2(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setOpenNew(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit">Crear</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={openPayment}
+        onClose={() => setOpenPayment(false)}
+        title={`Registrar pago ${selectedCharge?.unitCode ?? ""}`}
+      >
+        <form className="space-y-4" onSubmit={handlePayment}>
+          <Input label="Monto a pagar" type="number" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+          <Input label="Número de recibo" value={receiptNumber} onChange={(e) => setReceiptNumber(e.target.value)} required />
+          <Input label="Fecha de pago" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setOpenPayment(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit">Confirmar</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={accountOpen} onClose={() => setAccountOpen(false)} title="Estado de cuenta">
+        {accountData ? (
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-900">
+                Unidad {accountData.unit.code} · Responsable {accountData.unit.responsable ?? "N/D"}
+              </p>
+              <p className="text-xs text-slate-500">{accountData.unit.building}</p>
+            </div>
+            <div className="max-h-96 space-y-3 overflow-auto">
+              {accountData.periods.map((p) => (
+                <div key={p.settlementId} className="rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">
+                      {p.month}/{p.year}
+                    </div>
+                    <Badge variant={statusColor(p.status)}>{p.status}</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
+                    <span>Saldo anterior: ${p.previousBalance.toFixed(2)}</span>
+                    <span>Expensa mes: ${p.currentFee.toFixed(2)}</span>
+                    <span>Pagos parciales: ${p.partialPaymentsTotal.toFixed(2)}</span>
+                    <span className="font-semibold text-slate-900">
+                      Total: ${p.totalToPay.toFixed(2)}
+                    </span>
+                  </div>
+                  {p.payments.length > 0 && (
+                    <div className="mt-2 text-sm text-slate-600">
+                      Pagos:
+                      <ul className="list-disc pl-5">
+                        {p.payments.map((pay) => (
+                          <li key={pay.id}>
+                            {new Date(pay.paymentDate).toLocaleDateString("es-AR")} · ${pay.amount.toFixed(2)} · Recibo{" "}
+                            {pay.receiptNumber}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Cargando...</p>
+        )}
+      </Modal>
+    </div>
+  );
+}
