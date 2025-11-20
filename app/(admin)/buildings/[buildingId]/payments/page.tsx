@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Table, THead, Th, TBody, Tr, Td } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast";
+import { Modal } from "@/components/ui/modal";
 
 type PaymentRow = {
   id: number;
@@ -27,6 +28,8 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(false);
   const [unitOptions, setUnitOptions] = useState<string[]>([]);
   const [responsibleOptions, setResponsibleOptions] = useState<string[]>([]);
+  const [selected, setSelected] = useState<PaymentRow | null>(null);
+  const [openDetail, setOpenDetail] = useState(false);
 
   const fetchPayments = async () => {
     setLoading(true);
@@ -57,8 +60,9 @@ export default function PaymentsPage() {
     fetchPayments();
   }, [buildingId]);
 
-  const downloadReceipt = (id: number) => {
-    window.open(`/api/pdf/receipt/${id}`, "_blank");
+  const openDetailModal = (payment: PaymentRow) => {
+    setSelected(payment);
+    setOpenDetail(true);
   };
 
   return (
@@ -174,14 +178,61 @@ export default function PaymentsPage() {
               </Td>
               <Td className="text-right font-semibold">${p.amount.toFixed(2)}</Td>
               <Td>
-                <Button variant="ghost" onClick={() => downloadReceipt(p.id)}>
-                  Descargar recibo
+                <Button variant="ghost" onClick={() => openDetailModal(p)}>
+                  Ver detalle
                 </Button>
               </Td>
             </Tr>
           ))}
         </TBody>
       </Table>
+
+      <Modal
+        open={openDetail}
+        onClose={() => setOpenDetail(false)}
+        title="Detalle de pago"
+        footer={
+          <div className="flex justify-end gap-2">
+            {selected && (
+              <Button
+                variant="secondary"
+                onClick={() => window.open(`/api/pdf/receipt/${selected.id}`, "_blank")}
+              >
+                Descargar recibo
+              </Button>
+            )}
+            <Button variant="primary" onClick={() => setOpenDetail(false)}>
+              Cerrar
+            </Button>
+          </div>
+        }
+      >
+        {selected ? (
+          <div className="space-y-2 text-sm text-slate-700">
+            <p>
+              <span className="font-semibold">Fecha:</span>{" "}
+              {new Date(selected.paymentDate).toLocaleDateString("es-AR")}
+            </p>
+            <p>
+              <span className="font-semibold">Responsable:</span> {selected.responsible}
+            </p>
+            <p>
+              <span className="font-semibold">Unidad:</span> {selected.unit.code}
+            </p>
+            <p>
+              <span className="font-semibold">Período:</span> {selected.settlement.month}/{selected.settlement.year}
+            </p>
+            <p>
+              <span className="font-semibold">Recibo:</span> {selected.receiptNumber}
+            </p>
+            <p>
+              <span className="font-semibold">Monto:</span> ${selected.amount.toFixed(2)}
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Selecciona un pago para ver el detalle.</p>
+        )}
+      </Modal>
     </div>
   );
 }

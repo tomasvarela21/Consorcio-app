@@ -129,6 +129,7 @@ export default function DebtorsPage() {
           <tr>
             <Th>Unidad</Th>
             <Th>Responsable</Th>
+            <Th>Períodos adeudados</Th>
             <Th className="text-right">Deuda total</Th>
             <Th>Acciones</Th>
           </tr>
@@ -136,12 +137,12 @@ export default function DebtorsPage() {
         <TBody>
           {loading && (
             <Tr>
-              <Td colSpan={4}>Cargando morosos...</Td>
+              <Td colSpan={5}>Cargando morosos...</Td>
             </Tr>
           )}
           {!loading && filtered.length === 0 && (
             <Tr>
-              <Td colSpan={4} className="text-slate-500">
+              <Td colSpan={5} className="text-slate-500">
                 Actualmente no hay unidades morosas.
               </Td>
             </Tr>
@@ -150,6 +151,18 @@ export default function DebtorsPage() {
             <Tr key={d.unitId}>
               <Td>{d.unitCode}</Td>
               <Td>{d.responsable}</Td>
+              <Td>
+                <div className="flex flex-wrap gap-1 text-xs text-slate-600">
+                  {d.periods.map((p) => (
+                    <span
+                      key={p.settlementId}
+                      className="rounded-full bg-slate-100 px-2 py-1 font-semibold text-slate-700"
+                    >
+                      {p.month}/{p.year}
+                    </span>
+                  ))}
+                </div>
+              </Td>
               <Td className="text-right font-semibold">${d.totalDebt.toFixed(2)}</Td>
               <Td className="space-x-2">
                 <Button variant="secondary" onClick={() => openDetailModal(d)}>

@@ -24,6 +24,7 @@ export async function GET(
       settlement: {
         buildingId: buildingId,
         dueDate2: { lt: today },
+        NOT: { dueDate2: null },
       },
     },
     include: {

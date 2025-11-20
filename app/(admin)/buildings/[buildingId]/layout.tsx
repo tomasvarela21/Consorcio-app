@@ -43,7 +43,7 @@ export default async function BuildingLayout({
   const deudaTotal = Number(chargesPending._sum.totalToPay ?? 0);
 
   return (
-    <div className="flex gap-4">
+    <div className="flex flex-col gap-4 lg:flex-row">
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -51,7 +51,7 @@ export default async function BuildingLayout({
           `,
         }}
       />
-      <aside className="w-72 space-y-4">
+      <aside className="w-full space-y-4 lg:w-72">
         <div className="sticky top-6 space-y-4">
           <Card className="p-4">
             <Link href="/dashboard" className="inline-flex w-full items-center justify-start text-sm font-semibold text-slate-700 hover:text-slate-900">
