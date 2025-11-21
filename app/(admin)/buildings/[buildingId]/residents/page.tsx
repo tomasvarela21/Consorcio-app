@@ -42,6 +42,9 @@ export default function ResidentsPage() {
   const [loading, setLoading] = useState(false);
 
   const [open, setOpen] = useState(false);
+  const [openDetail, setOpenDetail] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
+  const [selected, setSelected] = useState<any>(null);
   const [unitCode, setUnitCode] = useState("");
   const [percentage, setPercentage] = useState("");
   const [inquilino, setInquilino] = useState<ContactForm>(emptyContact());
@@ -110,6 +113,79 @@ export default function ResidentsPage() {
 
   const pages = Math.ceil(total / pageSize);
 
+  const openView = async (unitId: number) => {
+    const res = await fetch(`/api/units/${unitId}`);
+    if (res.ok) {
+      const payload = await res.json();
+      setSelected(payload);
+      setOpenDetail(true);
+    } else {
+      toast.error("No pudimos cargar el residente");
+    }
+  };
+
+  const openEditModal = async (unitId: number) => {
+    const res = await fetch(`/api/units/${unitId}`);
+    if (res.ok) {
+      const payload = await res.json();
+      setSelected(payload);
+      setUnitCode(payload.code);
+      setPercentage(String(payload.percentage));
+      const toForm = (role: string) => {
+        const c = payload.contacts.find((ct: any) => ct.role === role);
+        return c
+          ? {
+              fullName: c.fullName ?? "",
+              dni: c.dni ?? "",
+              phone: c.phone ?? "",
+              address: c.address ?? "",
+            }
+          : emptyContact();
+      };
+      setInquilino(toForm("INQUILINO"));
+      setResponsable(toForm("RESPONSABLE"));
+      setPropietario(toForm("PROPIETARIO"));
+      setInmobiliaria(toForm("INMOBILIARIA"));
+      setOpenEdit(true);
+    } else {
+      toast.error("No pudimos cargar el residente");
+    }
+  };
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selected) return;
+    setLoading(true);
+    if (!unitCode || !percentage) {
+      toast.error("Unidad y porcentaje son obligatorios");
+      setLoading(false);
+      return;
+    }
+    if (!responsable.fullName || !responsable.phone) {
+      toast.error("Responsable de pago requiere nombre y celular");
+      setLoading(false);
+      return;
+    }
+    const res = await fetch(`/api/units/${selected.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        code: unitCode,
+        percentage: Number(percentage),
+        contacts: { inquilino, responsable, propietario, inmobiliaria },
+      }),
+    });
+    if (res.ok) {
+      toast.success("Residente actualizado");
+      setOpenEdit(false);
+      fetchResidents();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      toast.error(body.message ?? "Error al actualizar");
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -140,17 +216,18 @@ export default function ResidentsPage() {
             <Th>Responsable de pago</Th>
             <Th className="text-right">Porcentaje</Th>
             <Th>Estado de cuenta</Th>
+            <Th>Acciones</Th>
           </tr>
         </THead>
         <TBody>
           {loading && (
             <Tr>
-              <Td colSpan={4}>Cargando datos...</Td>
+              <Td colSpan={5}>Cargando datos...</Td>
             </Tr>
           )}
           {!loading && data.length === 0 && (
             <Tr>
-              <Td colSpan={4}>
+              <Td colSpan={5}>
                 <div className="flex flex-col gap-2">
                   <span className="text-slate-500">
                     Este edificio aun no tiene residentes cargados.
@@ -171,6 +248,14 @@ export default function ResidentsPage() {
                 >
                   {row.accountStatus === "ON_TIME" ? "Al dia" : "Deuda pendiente"}
                 </Badge>
+              </Td>
+              <Td className="space-x-2">
+                <Button variant="secondary" onClick={() => openView(row.id)}>
+                  Ver info
+                </Button>
+                <Button variant="ghost" onClick={() => openEditModal(row.id)}>
+                  Editar
+                </Button>
               </Td>
             </Tr>
           ))}
@@ -200,8 +285,8 @@ export default function ResidentsPage() {
       )}
 
       <Modal open={open} onClose={() => setOpen(false)} title="Registrar nuevo residente">
-        <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid gap-4 md:grid-cols-2">
+        <form className="space-y-3" onSubmit={handleSubmit}>
+          <div className="grid gap-3 md:grid-cols-2">
             <Input
               label="Unidad (ej: A-1)"
               value={unitCode}
@@ -251,6 +336,72 @@ export default function ResidentsPage() {
           </div>
         </form>
       </Modal>
+
+      <Modal open={openDetail} onClose={() => setOpenDetail(false)} title="Información del residente">
+        {selected ? (
+          <div className="space-y-2 text-sm text-slate-700">
+            <p>
+              <span className="font-semibold">Unidad:</span> {selected.code}
+            </p>
+            <p>
+              <span className="font-semibold">Porcentaje:</span> {selected.percentage}%
+            </p>
+            <p>
+              <span className="font-semibold">Estado:</span> {selected.accountStatus}
+            </p>
+            <div className="space-y-1">
+              <p className="font-semibold">Contactos</p>
+              {selected.contacts.map((c: any) => (
+                <div key={c.id} className="rounded-lg border border-slate-200 p-2">
+                  <p className="text-xs uppercase text-slate-500">{c.role}</p>
+                  <p>{c.fullName}</p>
+                  {c.phone && <p className="text-slate-500">{c.phone}</p>}
+                  {c.dni && <p className="text-slate-500">DNI/CUIT: {c.dni}</p>}
+                  {c.address && <p className="text-slate-500">{c.address}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Selecciona un residente.</p>
+        )}
+      </Modal>
+
+      <Modal open={openEdit} onClose={() => setOpenEdit(false)} title="Editar residente">
+        <form className="space-y-3" onSubmit={handleUpdate}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Input
+              label="Unidad (ej: A-1)"
+              value={unitCode}
+              onChange={(e) => setUnitCode(e.target.value)}
+              required
+            />
+            <Input
+              label="Porcentaje (%)"
+              type="number"
+              min="0"
+              step="0.01"
+              value={percentage}
+              onChange={(e) => setPercentage(e.target.value)}
+              required
+            />
+          </div>
+
+          <ContactBlock title="Inquilino" contact={inquilino} onChange={setInquilino} />
+          <ContactBlock title="Responsable de pago" required contact={responsable} onChange={setResponsable} />
+          <ContactBlock title="Propietario" contact={propietario} onChange={setPropietario} />
+          <ContactBlock title="Inmobiliaria" contact={inmobiliaria} onChange={setInmobiliaria} />
+
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" type="button" onClick={() => setOpenEdit(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" loading={loading}>
+              Guardar cambios
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
@@ -267,7 +418,7 @@ function ContactBlock({
   onChange: (c: ContactForm) => void;
 }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-4">
+    <div className="rounded-lg border border-slate-200 p-3">
       <div className="mb-3 flex items-center justify-between">
         <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
         {required && <span className="text-xs text-red-500">Obligatorio nombre + celular</span>}

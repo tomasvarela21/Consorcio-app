@@ -193,30 +193,35 @@ export default function SettlementsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
-        <div>
+        <div className="flex flex-col">
           <h2 className="text-xl font-semibold text-slate-900">Liquidaciones</h2>
           <p className="text-sm text-slate-500">Busca por mes y año.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <select
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-            value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
-          >
-            {monthOptions.map((m) => (
-              <option key={m} value={m}>
-                Mes {m}
-              </option>
-            ))}
-          </select>
-          <Input
-            label="Año"
-            type="number"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="w-32"
-          />
-          <Button variant="secondary" onClick={loadData} disabled={loading}>
+        <div className="flex items-end gap-2">
+          <div className="flex flex-col text-xs font-semibold text-slate-600">
+            <label>Mes</label>
+            <select
+              className="h-9 w-24 rounded-md border border-slate-300 bg-white px-2 text-sm"
+              value={month}
+              onChange={(e) => setMonth(Number(e.target.value))}
+            >
+              {monthOptions.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col text-xs font-semibold text-slate-600">
+            <label>Año</label>
+            <input
+              className="h-9 w-28 rounded-md border border-slate-300 px-2 text-sm"
+              type="number"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+            />
+          </div>
+          <Button variant="secondary" onClick={loadData} disabled={loading} className="h-9">
             Aplicar
           </Button>
         </div>
@@ -308,9 +313,6 @@ export default function SettlementsPage() {
                 <Td className="space-x-2">
                   <Button variant="secondary" onClick={() => openPayModal(c)}>
                     Realizar pago
-                  </Button>
-                  <Button variant="ghost" onClick={() => handleAccountHistory(c.unitId)}>
-                    Ver estado
                   </Button>
                 </Td>
               </Tr>
