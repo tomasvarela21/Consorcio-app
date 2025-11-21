@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth";
 import { roundTwo } from "@/lib/billing";
+import { ChargeStatus, Prisma } from "@prisma/client";
 
 export async function GET(
   req: Request,
@@ -117,7 +118,7 @@ export async function POST(
     },
   });
 
-  const chargesData = units.map((unit) => {
+  const chargesData: Prisma.SettlementChargeCreateManyInput[] = units.map((unit) => {
     const currentFee = roundTwo(Number(totalExpense) * Number(unit.percentage) * 0.01);
     const previousBalance = 0;
     const totalToPay = roundTwo(previousBalance + currentFee);
@@ -128,7 +129,7 @@ export async function POST(
       currentFee,
       partialPaymentsTotal: 0,
       totalToPay,
-      status: "PENDING",
+      status: ChargeStatus.PENDING,
     };
   });
 

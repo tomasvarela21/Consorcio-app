@@ -48,7 +48,10 @@ export default async function BuildingOverview({
     }),
     prisma.settlementCharge.aggregate({
       _sum: { totalToPay: true },
-      where: { settlement: { buildingId }, status: { in: ["PENDING", "PARTIAL"] } },
+      where: {
+        settlement: { buildingId },
+        status: { in: ["PENDING", "PARTIAL"] },
+      },
     }),
     prisma.settlementCharge.groupBy({
       by: ["unitId"],
@@ -77,27 +80,40 @@ export default async function BuildingOverview({
 
   const deudaTotal = Number(debtPending._sum.totalToPay ?? 0);
   const totalExpensasMes = Number(currentSettlement?.totalExpense ?? 0);
-  const deudaMes = currentCharges.reduce((acc, c) => acc + Number(c.totalToPay), 0);
-  const pagosMes = paymentsThisMonth.reduce((acc, p) => acc + Number(p.amount), 0);
+  const deudaMes = currentCharges.reduce(
+    (acc, c) => acc + Number(c.totalToPay),
+    0,
+  );
+  const pagosMes = paymentsThisMonth.reduce(
+    (acc, p) => acc + Number(p.amount),
+    0,
+  );
 
   const morososVencidos = currentCharges.filter(
-    (c) => c.totalToPay > 0 && c.settlement.dueDate2 && c.settlement.dueDate2 < today,
+    (c) =>
+      Number(c.totalToPay) > 0 &&
+      c.settlement.dueDate2 &&
+      c.settlement.dueDate2 < today,
   );
+
   const porVencer = currentCharges.filter((c) => {
     if (!c.settlement.dueDate2) return false;
     const diff = c.settlement.dueDate2.getTime() - today.getTime();
-    return c.totalToPay > 0 && diff > 0 && diff <= 7 * 24 * 60 * 60 * 1000;
+    return (
+      Number(c.totalToPay) > 0 &&
+      diff > 0 &&
+      diff <= 7 * 24 * 60 * 60 * 1000
+    );
   });
 
-  const proximosVencimientos = porVencer
-    .slice(0, 5)
-    .map((c) => ({
-      unitCode: c.unit.code,
-      responsable:
-        c.unit.contacts.find((ct) => ct.role === "RESPONSABLE")?.fullName ?? "Sin responsable",
-      fecha: c.settlement.dueDate2,
-      monto: Number(c.totalToPay),
-    }));
+  const proximosVencimientos = porVencer.slice(0, 5).map((c) => ({
+    unitCode: c.unit.code,
+    responsable:
+      c.unit.contacts.find((ct) => ct.role === "RESPONSABLE")?.fullName ??
+      "Sin responsable",
+    fecha: c.settlement.dueDate2,
+    monto: Number(c.totalToPay),
+  }));
 
   return (
     <div className="space-y-6">
@@ -109,82 +125,118 @@ export default async function BuildingOverview({
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Link href={`/buildings/${buildingId}/settlements`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
+        <Link
+          href={`/buildings/${buildingId}/settlements`}
+          className="block transition hover:-translate-y-0.5 hover:shadow-md"
+        >
           <Card className="p-5 h-full">
-          <p className="text-sm text-slate-500">Total expensas del mes</p>
-          <p className="text-2xl font-semibold text-slate-900">
-            ${totalExpensasMes.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-xs text-slate-500 mt-1">Este mes</p>
+            <p className="text-sm text-slate-500">Total expensas del mes</p>
+            <p className="text-2xl font-semibold text-slate-900">
+              $
+              {totalExpensasMes.toLocaleString("es-AR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Este mes</p>
           </Card>
         </Link>
-        <Link href={`/buildings/${buildingId}/payments?month=${currentMonth}&year=${currentYear}`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
+        <Link
+          href={`/buildings/${buildingId}/payments?month=${currentMonth}&year=${currentYear}`}
+          className="block transition hover:-translate-y-0.5 hover:shadow-md"
+        >
           <Card className="p-5 h-full">
-          <p className="text-sm text-slate-500">Pagos cobrados este mes</p>
-          <p className="text-2xl font-semibold text-slate-900">
-            ${pagosMes.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-xs text-slate-500 mt-1">Liquidaciones del mes</p>
+            <p className="text-sm text-slate-500">Pagos cobrados este mes</p>
+            <p className="text-2xl font-semibold text-slate-900">
+              $
+              {pagosMes.toLocaleString("es-AR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Liquidaciones del mes
+            </p>
           </Card>
         </Link>
-        <Link href={`/buildings/${buildingId}/settlements`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
+        <Link
+          href={`/buildings/${buildingId}/settlements`}
+          className="block transition hover:-translate-y-0.5 hover:shadow-md"
+        >
           <Card className="p-5 h-full">
-          <p className="text-sm text-slate-500">Deuda total del mes</p>
-          <p className="text-2xl font-semibold text-slate-900">
-            ${deudaMes.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
-          </p>
-          <p className="text-xs text-slate-500 mt-1">Pendiente del periodo</p>
+            <p className="text-sm text-slate-500">Deuda total del mes</p>
+            <p className="text-2xl font-semibold text-slate-900">
+              $
+              {deudaMes.toLocaleString("es-AR", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Pendiente del periodo</p>
           </Card>
         </Link>
-        <Link href={`/buildings/${buildingId}/debtors`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
+        <Link
+          href={`/buildings/${buildingId}/debtors`}
+          className="block transition hover:-translate-y-0.5 hover:shadow-md"
+        >
           <Card className="p-5 h-full">
-          <p className="text-sm text-slate-500">Unidades morosas (vencidas)</p>
-          <p className="text-2xl font-semibold text-slate-900">
-            {morososVencidos.length}
-          </p>
-          <p className="text-xs text-slate-500 mt-1">Con deuda vencida</p>
+            <p className="text-sm text-slate-500">
+              Unidades morosas (vencidas)
+            </p>
+            <p className="text-2xl font-semibold text-slate-900">
+              {morososVencidos.length}
+            </p>
+            <p className="text-xs text-slate-500 mt-1">Con deuda vencida</p>
           </Card>
         </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Link href={`/buildings/${buildingId}/debtors`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
+        <Link
+          href={`/buildings/${buildingId}/debtors`}
+          className="block transition hover:-translate-y-0.5 hover:shadow-md"
+        >
           <Card className="p-4 h-full">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Pagos vencidos</p>
-              <p className="text-2xl font-semibold text-red-600">
-                {morososVencidos.length}
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">Pagos vencidos</p>
+                <p className="text-2xl font-semibold text-red-600">
+                  {morososVencidos.length}
+                </p>
+              </div>
+              <Button variant="secondary">Ver morosos</Button>
             </div>
-            <Button variant="secondary">Ver morosos</Button>
-          </div>
           </Card>
         </Link>
-        <Link href={`/buildings/${buildingId}/settlements`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
+        <Link
+          href={`/buildings/${buildingId}/settlements`}
+          className="block transition hover:-translate-y-0.5 hover:shadow-md"
+        >
           <Card className="p-4 h-full">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Por vencer (7 dias)</p>
-              <p className="text-2xl font-semibold text-amber-600">
-                {porVencer.length}
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">Por vencer (7 dias)</p>
+                <p className="text-2xl font-semibold text-amber-600">
+                  {porVencer.length}
+                </p>
+              </div>
+              <Button variant="secondary">Ver liquidaciones</Button>
             </div>
-            <Button variant="secondary">Ver liquidaciones</Button>
-          </div>
           </Card>
         </Link>
-        <Link href={`/buildings/${buildingId}/payments?month=${currentMonth}&year=${currentYear}`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
+        <Link
+          href={`/buildings/${buildingId}/payments?month=${currentMonth}&year=${currentYear}`}
+          className="block transition hover:-translate-y-0.5 hover:shadow-md"
+        >
           <Card className="p-4 h-full">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Pagos registrados este mes</p>
-              <p className="text-2xl font-semibold text-emerald-600">
-                {paymentsThisMonth.length}
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-slate-500">
+                  Pagos registrados este mes
+                </p>
+                <p className="text-2xl font-semibold text-emerald-600">
+                  {paymentsThisMonth.length}
+                </p>
+              </div>
+              <Button variant="secondary">Ver pagos</Button>
             </div>
-            <Button variant="secondary">Ver pagos</Button>
-          </div>
           </Card>
         </Link>
       </div>
@@ -225,8 +277,16 @@ export default async function BuildingOverview({
                 </Td>
                 <Td>${Number(s.totalExpense).toFixed(2)}</Td>
                 <Td className="space-x-2">
-                  {s.dueDate1 && <Badge variant="info">1° {s.dueDate1.toLocaleDateString("es-AR")}</Badge>}
-                  {s.dueDate2 && <Badge variant="warning">2° {s.dueDate2.toLocaleDateString("es-AR")}</Badge>}
+                  {s.dueDate1 && (
+                    <Badge variant="info">
+                      1° {s.dueDate1.toLocaleDateString("es-AR")}
+                    </Badge>
+                  )}
+                  {s.dueDate2 && (
+                    <Badge variant="warning">
+                      2° {s.dueDate2.toLocaleDateString("es-AR")}
+                    </Badge>
+                  )}
                 </Td>
               </Tr>
             ))}
@@ -256,19 +316,26 @@ export default async function BuildingOverview({
               <Tr>
                 <Td colSpan={3} className="text-slate-500">
                   Aún no hay unidades cargadas.{" "}
-                  <Link href={`/buildings/${buildingId}/residents`} className="text-slate-900 underline">
+                  <Link
+                    href={`/buildings/${buildingId}/residents`}
+                    className="text-slate-900 underline"
+                  >
                     Registrar primer residente
                   </Link>
                 </Td>
               </Tr>
             )}
             {units.map((u) => {
-              const responsable = u.contacts.find((c) => c.role === "RESPONSABLE");
+              const responsable = u.contacts.find(
+                (c) => c.role === "RESPONSABLE",
+              );
               return (
                 <Tr key={u.id}>
                   <Td>{u.code}</Td>
                   <Td>{responsable?.fullName ?? "Sin responsable"}</Td>
-                  <Td className="text-right">{Number(u.percentage)}%</Td>
+                  <Td className="text-right">
+                    {Number(u.percentage)}%
+                  </Td>
                 </Tr>
               );
             })}
@@ -286,15 +353,21 @@ export default async function BuildingOverview({
         }
       >
         {debtorsCount.length === 0 ? (
-          <p className="text-sm text-emerald-600">Actualmente no hay unidades morosas.</p>
+          <p className="text-sm text-emerald-600">
+            Actualmente no hay unidades morosas.
+          </p>
         ) : (
           <p className="text-sm text-slate-700">
-            {debtorsCount.length} unidades con deuda. Revisa el módulo de morosos para gestionar pagos.
+            {debtorsCount.length} unidades con deuda. Revisa el módulo de
+            morosos para gestionar pagos.
           </p>
         )}
       </Card>
 
-      <Card title="Próximos vencimientos" description="Cargos con vencimiento en los próximos 7 días">
+      <Card
+        title="Próximos vencimientos"
+        description="Cargos con vencimiento en los próximos 7 días"
+      >
         {proximosVencimientos.length === 0 ? (
           <p className="text-sm text-slate-500">
             No hay vencimientos próximos en los siguientes 7 días.
@@ -316,7 +389,10 @@ export default async function BuildingOverview({
                   <Td>{v.responsable}</Td>
                   <Td>{v.fecha?.toLocaleDateString("es-AR")}</Td>
                   <Td className="text-right">
-                    ${v.monto.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                    $
+                    {v.monto.toLocaleString("es-AR", {
+                      minimumFractionDigits: 2,
+                    })}
                   </Td>
                 </Tr>
               ))}

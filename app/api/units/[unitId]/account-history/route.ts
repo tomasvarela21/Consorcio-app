@@ -1,31 +1,41 @@
-import { NextResponse } from "next/server";
+// app/api/units/[unitId]/account-history/route.ts
+
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth";
 
+type Params = {
+  unitId: string;
+};
+
 export async function GET(
-  _req: Request,
-  { params }: { params: { unitId: string } },
+  _req: NextRequest,
+  { params }: { params: Promise<Params> }
 ) {
+  const { unitId } = await params;
+
   const session = await getAdminSession();
   if (!session) {
     return NextResponse.json({ message: "No autorizado" }, { status: 401 });
   }
-  const unitId = Number(params.unitId);
-  if (!unitId) {
+
+  const unitIdNumber = Number(unitId);
+  if (!unitIdNumber) {
     return NextResponse.json({ message: "Unidad inválida" }, { status: 400 });
   }
 
   const unit = await prisma.unit.findUnique({
-    where: { id: unitId },
+    where: { id: unitIdNumber },
     include: { building: true, contacts: true },
   });
+
   if (!unit) {
     return NextResponse.json({ message: "No encontrado" }, { status: 404 });
   }
 
   const [charges, payments] = await Promise.all([
     prisma.settlementCharge.findMany({
-      where: { unitId },
+      where: { unitId: unitIdNumber },
       include: { settlement: true },
       orderBy: [
         { settlement: { year: "desc" } },
@@ -33,7 +43,7 @@ export async function GET(
       ],
     }),
     prisma.payment.findMany({
-      where: { unitId },
+      where: { unitId: unitIdNumber },
       orderBy: { paymentDate: "desc" },
     }),
   ]);
