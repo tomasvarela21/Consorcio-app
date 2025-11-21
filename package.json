@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint .",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev --name init --create-only"
+    "prisma:migrate": "prisma migrate dev --name init --create-only",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "^5.21.1",
+    "@prisma/client": "5.21.1",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "jose": "^5.9.3",
@@ -29,7 +30,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
-    "prisma": "^5.21.1",
+    "prisma": "5.21.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
