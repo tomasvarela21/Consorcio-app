@@ -10,9 +10,14 @@ type CardProps = PropsWithChildren<{
 
 export function Card({ className, title, description, actions, children }: CardProps) {
   return (
-    <div className={clsx("rounded-xl border border-slate-200 bg-white shadow-sm", className)}>
+    <div
+      className={clsx(
+        "rounded-2xl border border-slate-200/70 bg-white/90 shadow-lg shadow-slate-200/50 backdrop-blur",
+        className,
+      )}
+    >
       {(title || description || actions) && (
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200/50 px-5 py-4">
           <div>
             {title && <h3 className="text-lg font-semibold text-slate-900">{title}</h3>}
             {description && <p className="text-sm text-slate-500">{description}</p>}

@@ -18,13 +18,13 @@ export function Button({
     "inline-flex items-center justify-center gap-2 rounded-md text-sm font-semibold transition px-3 py-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-70 disabled:cursor-not-allowed";
   const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
     primary:
-      "bg-slate-900 text-white hover:bg-slate-800 focus-visible:outline-slate-900",
+      "bg-gradient-to-r from-slate-900 via-indigo-900 to-indigo-800 text-white shadow-lg shadow-indigo-900/30 hover:from-slate-800 hover:via-indigo-800 hover:to-indigo-700 focus-visible:outline-indigo-900",
     secondary:
-      "bg-white text-slate-900 border border-slate-200 shadow-sm hover:bg-slate-50 focus-visible:outline-slate-900",
+      "border border-cyan-200/60 bg-gradient-to-r from-cyan-50 via-sky-50 to-sky-100 text-slate-900 shadow-sm hover:from-cyan-100 hover:via-sky-100 hover:to-sky-200 focus-visible:outline-sky-600",
     ghost:
-      "text-slate-700 hover:bg-slate-100 border border-transparent focus-visible:outline-slate-900",
+      "text-slate-700 hover:bg-slate-900/5 border border-transparent focus-visible:outline-indigo-900",
     danger:
-      "bg-red-600 text-white hover:bg-red-500 focus-visible:outline-red-600",
+      "bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-md shadow-rose-500/30 hover:from-rose-500 hover:to-rose-400 focus-visible:outline-rose-600",
   };
 
   return (

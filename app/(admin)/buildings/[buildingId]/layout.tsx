@@ -53,25 +53,25 @@ export default async function BuildingLayout({
       />
       <aside className="w-full space-y-4 lg:w-72">
         <div className="sticky top-6 space-y-4">
-          <Card className="p-4">
-            <Link href="/dashboard" className="inline-flex w-full items-center justify-start text-sm font-semibold text-slate-700 hover:text-slate-900">
+          <Card className="border-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl shadow-slate-900/50">
+            <Link href="/dashboard" className="inline-flex w-full items-center justify-start text-sm font-semibold text-white/80 transition hover:text-white">
               ← Volver al dashboard
             </Link>
-            <p className="text-xs uppercase tracking-wide text-slate-500">Edificio</p>
-            <h1 className="text-xl font-semibold text-slate-900">{building.name}</h1>
-            <p className="text-sm text-slate-500">{building.address}</p>
-            <div className="mt-3 space-y-1 text-sm text-slate-600">
+            <p className="text-xs uppercase tracking-wide text-slate-300">Edificio</p>
+            <h1 className="text-xl font-semibold text-white">{building.name}</h1>
+            <p className="text-sm text-slate-300">{building.address}</p>
+            <div className="mt-3 space-y-1 text-sm text-slate-200/90">
               <p>
                 Unidades:{" "}
-                <span className="font-semibold text-slate-900">{unitsCount}</span>
+                <span className="font-semibold text-white">{unitsCount}</span>
               </p>
               <p>
                 Deuda estimada:{" "}
-                <span className="font-semibold text-slate-900">
+                <span className="font-semibold text-white">
                   ${deudaTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
                 </span>
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-300">
                 Última liquidación:{" "}
                 {lastSettlement
                   ? `${lastSettlement.month}/${lastSettlement.year}`
@@ -79,14 +79,14 @@ export default async function BuildingLayout({
               </p>
               <div className="mt-3">
                 <Link href={`/buildings/${buildingId}/settlements`}>
-                  <Button variant="secondary" className="w-full">
+                  <Button variant="secondary" className="w-full !border-white/30 !bg-white/10 !text-black hover:!bg-white/20">
                     Nueva liquidación
                   </Button>
                 </Link>
               </div>
             </div>
           </Card>
-          <Card className="p-0">
+          <Card className="border-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700/90 ">
             <BuildingNav buildingId={building.id} orientation="vertical" />
           </Card>
         </div>
