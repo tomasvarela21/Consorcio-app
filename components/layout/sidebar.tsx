@@ -13,7 +13,7 @@ export function Sidebar() {
   const pathname = usePathname();
   return (
     <aside
-      className="global-sidebar flex h-full w-64 flex-col gap-4 border-r border-slate-200 bg-slate-900 px-4 py-6 text-slate-100"
+      className="global-sidebar flex min-h-screen w-64 flex-col gap-4 self-stretch border-r border-slate-200 bg-slate-900 px-4 py-6 text-slate-100"
     >
       <div className="px-2">
         <div className="text-lg font-semibold">Gestión de Consorcios</div>
