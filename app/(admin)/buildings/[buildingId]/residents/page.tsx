@@ -24,12 +24,21 @@ type ContactForm = {
   address: string;
 };
 
+type RoleKey = "INQUILINO" | "RESPONSABLE" | "PROPIETARIO" | "INMOBILIARIA";
+
 const emptyContact = (): ContactForm => ({
   fullName: "",
   dni: "",
   phone: "",
   address: "",
 });
+
+const ROLE_TABS: { key: RoleKey; label: string }[] = [
+  { key: "RESPONSABLE", label: "Responsable de pago" },
+  { key: "PROPIETARIO", label: "Propietario" },
+  { key: "INQUILINO", label: "Inquilino" },
+  { key: "INMOBILIARIA", label: "Inmobiliaria" },
+];
 
 export default function ResidentsPage() {
   const params = useParams<{ buildingId: string }>();
@@ -47,15 +56,22 @@ export default function ResidentsPage() {
   const [selected, setSelected] = useState<any>(null);
   const [unitCode, setUnitCode] = useState("");
   const [percentage, setPercentage] = useState("");
+
   const [inquilino, setInquilino] = useState<ContactForm>(emptyContact());
   const [responsable, setResponsable] = useState<ContactForm>(emptyContact());
   const [propietario, setPropietario] = useState<ContactForm>(emptyContact());
   const [inmobiliaria, setInmobiliaria] = useState<ContactForm>(emptyContact());
 
+  // pestañas activas para cada modal
+  const [createActiveTab, setCreateActiveTab] = useState<RoleKey>("RESPONSABLE");
+  const [editActiveTab, setEditActiveTab] = useState<RoleKey>("RESPONSABLE");
+
   const fetchResidents = async () => {
     setLoading(true);
     const res = await fetch(
-      `/api/buildings/${buildingId}/residents?search=${encodeURIComponent(search)}&page=${page}&pageSize=${pageSize}`,
+      `/api/buildings/${buildingId}/residents?search=${encodeURIComponent(
+        search,
+      )}&page=${page}&pageSize=${pageSize}`,
     );
     if (res.ok) {
       const body = await res.json();
@@ -103,6 +119,7 @@ export default function ResidentsPage() {
       setResponsable(emptyContact());
       setPropietario(emptyContact());
       setInmobiliaria(emptyContact());
+      setCreateActiveTab("RESPONSABLE");
       fetchResidents();
     } else {
       const body = await res.json().catch(() => ({}));
@@ -146,6 +163,7 @@ export default function ResidentsPage() {
       setResponsable(toForm("RESPONSABLE"));
       setPropietario(toForm("PROPIETARIO"));
       setInmobiliaria(toForm("INMOBILIARIA"));
+      setEditActiveTab("RESPONSABLE");
       setOpenEdit(true);
     } else {
       toast.error("No pudimos cargar el residente");
@@ -184,6 +202,21 @@ export default function ResidentsPage() {
       toast.error(body.message ?? "Error al actualizar");
     }
     setLoading(false);
+  };
+
+  // helper para obtener contacto y setter según pestaña
+  const getContactByRole = (role: RoleKey): [ContactForm, (c: ContactForm) => void, boolean] => {
+    switch (role) {
+      case "INQUILINO":
+        return [inquilino, setInquilino, false];
+      case "PROPIETARIO":
+        return [propietario, setPropietario, false];
+      case "INMOBILIARIA":
+        return [inmobiliaria, setInmobiliaria, false];
+      case "RESPONSABLE":
+      default:
+        return [responsable, setResponsable, true]; // responsable es obligatorio
+    }
   };
 
   return (
@@ -232,7 +265,9 @@ export default function ResidentsPage() {
                   <span className="text-slate-500">
                     Este edificio aun no tiene residentes cargados.
                   </span>
-                  <Button onClick={() => setOpen(true)}>Registrar primer residente</Button>
+                  <Button onClick={() => setOpen(true)}>
+                    Registrar primer residente
+                  </Button>
                 </div>
               </Td>
             </Tr>
@@ -246,7 +281,9 @@ export default function ResidentsPage() {
                 <Badge
                   variant={row.accountStatus === "ON_TIME" ? "success" : "warning"}
                 >
-                  {row.accountStatus === "ON_TIME" ? "Al dia" : "Deuda pendiente"}
+                  {row.accountStatus === "ON_TIME"
+                    ? "Al dia"
+                    : "Deuda pendiente"}
                 </Badge>
               </Td>
               <Td className="space-x-2">
@@ -284,8 +321,9 @@ export default function ResidentsPage() {
         </div>
       )}
 
+      {/* MODAL CREAR */}
       <Modal open={open} onClose={() => setOpen(false)} title="Registrar nuevo residente">
-        <form className="space-y-3" onSubmit={handleSubmit}>
+        <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="grid gap-3 md:grid-cols-2">
             <Input
               label="Unidad (ej: A-1)"
@@ -304,30 +342,49 @@ export default function ResidentsPage() {
             />
           </div>
 
-          <ContactBlock
-            title="Inquilino"
-            contact={inquilino}
-            onChange={setInquilino}
-          />
-          <ContactBlock
-            title="Responsable de pago"
-            required
-            contact={responsable}
-            onChange={setResponsable}
-          />
-          <ContactBlock
-            title="Propietario"
-            contact={propietario}
-            onChange={setPropietario}
-          />
-          <ContactBlock
-            title="Inmobiliaria"
-            contact={inmobiliaria}
-            onChange={setInmobiliaria}
-          />
+          {/* Tabs contactos */}
+          <div className="space-y-3">
+            <div className="flex gap-4 border-b border-slate-200">
+              {ROLE_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setCreateActiveTab(tab.key)}
+                  className={[
+                    "pb-2 text-sm font-medium transition",
+                    createActiveTab === tab.key
+                      ? "border-b-2 border-orange-500 text-slate-900"
+                      : "text-slate-500 hover:text-slate-800",
+                  ].join(" ")}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {(() => {
+              const [contact, setContact, isRequired] =
+                getContactByRole(createActiveTab);
+              return (
+                <ContactBlock
+                  title={
+                    ROLE_TABS.find((t) => t.key === createActiveTab)?.label ??
+                    ""
+                  }
+                  required={isRequired}
+                  contact={contact}
+                  onChange={setContact}
+                />
+              );
+            })()}
+          </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" type="button" onClick={() => setOpen(false)}>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => setOpen(false)}
+            >
               Cancelar
             </Button>
             <Button type="submit" loading={loading}>
@@ -337,26 +394,38 @@ export default function ResidentsPage() {
         </form>
       </Modal>
 
-      <Modal open={openDetail} onClose={() => setOpenDetail(false)} title="Información del residente">
+      {/* MODAL DETALLE */}
+      <Modal
+        open={openDetail}
+        onClose={() => setOpenDetail(false)}
+        title="Información del residente"
+      >
         {selected ? (
           <div className="space-y-2 text-sm text-slate-700">
             <p>
               <span className="font-semibold">Unidad:</span> {selected.code}
             </p>
             <p>
-              <span className="font-semibold">Porcentaje:</span> {selected.percentage}%
+              <span className="font-semibold">Porcentaje:</span>{" "}
+              {selected.percentage}%
             </p>
             <p>
-              <span className="font-semibold">Estado:</span> {selected.accountStatus}
+              <span className="font-semibold">Estado:</span>{" "}
+              {selected.accountStatus}
             </p>
             <div className="space-y-1">
               <p className="font-semibold">Contactos</p>
               {selected.contacts.map((c: any) => (
-                <div key={c.id} className="rounded-lg border border-slate-200 p-2">
+                <div
+                  key={c.id}
+                  className="rounded-lg border border-slate-200 p-2"
+                >
                   <p className="text-xs uppercase text-slate-500">{c.role}</p>
                   <p>{c.fullName}</p>
                   {c.phone && <p className="text-slate-500">{c.phone}</p>}
-                  {c.dni && <p className="text-slate-500">DNI/CUIT: {c.dni}</p>}
+                  {c.dni && (
+                    <p className="text-slate-500">DNI/CUIT: {c.dni}</p>
+                  )}
                   {c.address && <p className="text-slate-500">{c.address}</p>}
                 </div>
               ))}
@@ -367,8 +436,9 @@ export default function ResidentsPage() {
         )}
       </Modal>
 
+      {/* MODAL EDITAR */}
       <Modal open={openEdit} onClose={() => setOpenEdit(false)} title="Editar residente">
-        <form className="space-y-3" onSubmit={handleUpdate}>
+        <form className="space-y-4" onSubmit={handleUpdate}>
           <div className="grid gap-3 md:grid-cols-2">
             <Input
               label="Unidad (ej: A-1)"
@@ -387,13 +457,48 @@ export default function ResidentsPage() {
             />
           </div>
 
-          <ContactBlock title="Inquilino" contact={inquilino} onChange={setInquilino} />
-          <ContactBlock title="Responsable de pago" required contact={responsable} onChange={setResponsable} />
-          <ContactBlock title="Propietario" contact={propietario} onChange={setPropietario} />
-          <ContactBlock title="Inmobiliaria" contact={inmobiliaria} onChange={setInmobiliaria} />
+          {/* Tabs contactos */}
+          <div className="space-y-3">
+            <div className="flex gap-4 border-b border-slate-200">
+              {ROLE_TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setEditActiveTab(tab.key)}
+                  className={[
+                    "pb-2 text-sm font-medium transition",
+                    editActiveTab === tab.key
+                      ? "border-b-2 border-orange-500 text-slate-900"
+                      : "text-slate-500 hover:text-slate-800",
+                  ].join(" ")}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {(() => {
+              const [contact, setContact, isRequired] =
+                getContactByRole(editActiveTab);
+              return (
+                <ContactBlock
+                  title={
+                    ROLE_TABS.find((t) => t.key === editActiveTab)?.label ?? ""
+                  }
+                  required={isRequired}
+                  contact={contact}
+                  onChange={setContact}
+                />
+              );
+            })()}
+          </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" type="button" onClick={() => setOpenEdit(false)}>
+            <Button
+              variant="secondary"
+              type="button"
+              onClick={() => setOpenEdit(false)}
+            >
               Cancelar
             </Button>
             <Button type="submit" loading={loading}>
@@ -421,7 +526,11 @@ function ContactBlock({
     <div className="rounded-lg border border-slate-200 p-3">
       <div className="mb-3 flex items-center justify-between">
         <h4 className="text-sm font-semibold text-slate-900">{title}</h4>
-        {required && <span className="text-xs text-red-500">Obligatorio nombre + celular</span>}
+        {required && (
+          <span className="text-xs text-red-500">
+            Obligatorio nombre + celular
+          </span>
+        )}
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <Input
