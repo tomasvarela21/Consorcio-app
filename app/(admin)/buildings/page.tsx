@@ -22,6 +22,10 @@ export default function BuildingsPage() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const loadBuildings = async () => {
     setLoading(true);
@@ -59,6 +63,41 @@ export default function BuildingsPage() {
     }
   };
 
+  const openDeleteModal = (building: Building) => {
+    setSelectedBuilding(building);
+    setDeletePassword("");
+    setDeleteOpen(true);
+  };
+
+  const closeDeleteModal = (force = false) => {
+    if (deleteLoading && !force) return;
+    setDeleteOpen(false);
+    setSelectedBuilding(null);
+    setDeletePassword("");
+  };
+
+  const handleDelete = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBuilding) return;
+    setDeleteLoading(true);
+    const res = await fetch("/api/buildings", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buildingId: selectedBuilding.id, password: deletePassword }),
+    });
+    if (res.ok) {
+      toast.success("Edificio eliminado");
+      setBuildings((prev) => prev.filter((b) => b.id !== selectedBuilding.id));
+      setDeleteLoading(false);
+      closeDeleteModal(true);
+      return;
+    } else {
+      const body = await res.json().catch(() => ({}));
+      toast.error(body.message ?? "Error al eliminar edificio");
+    }
+    setDeleteLoading(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -72,15 +111,35 @@ export default function BuildingsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {buildings.map((b) => (
           <Link key={b.id} href={`/buildings/${b.id}`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
-            <Card className="p-5 h-full">
-              <div className="flex items-start justify-between">
+            <Card className="h-full p-5">
+              <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">{b.name}</h3>
                   <p className="text-sm text-slate-500">{b.address}</p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  {b._count?.units ?? 0} unidades
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {b._count?.units ?? 0} unidades
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openDeleteModal(b);
+                    }}
+                    className="rounded-full p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+                    aria-label={`Eliminar ${b.name}`}
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M8 6v13c0 .552.448 1 1 1h6c.552 0 1-.448 1-1V6" />
+                      <path d="M10 10v6" />
+                      <path d="M14 10v6" />
+                      <path d="M9 6l1-2h4l1 2" />
+                    </svg>
+                  </button>
+                </div>
               </div>
               <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
                 <p>Liquidaciones: {b._count?.settlements ?? 0}</p>
@@ -110,6 +169,40 @@ export default function BuildingsPage() {
             <Button type="submit">Crear</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={deleteOpen} onClose={closeDeleteModal} title="Eliminar edificio">
+        {selectedBuilding ? (
+          <form className="space-y-4" onSubmit={handleDelete}>
+            <p className="text-sm text-slate-600">
+              Estás a punto de eliminar <span className="font-semibold text-slate-900">{selectedBuilding.name}</span>.
+              Esta acción no se puede deshacer y eliminará todas sus unidades y registros asociados.
+              Confirma ingresando tu contraseña.
+            </p>
+            <Input
+              label="Contraseña"
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              required
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={closeDeleteModal}
+                disabled={deleteLoading}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" variant="danger" loading={deleteLoading}>
+                Eliminar
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <p className="text-sm text-slate-500">Selecciona un edificio para eliminarlo.</p>
+        )}
       </Modal>
     </div>
   );

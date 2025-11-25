@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth";
+import { compare } from "bcryptjs";
 
 export async function GET() {
   const session = await getAdminSession();
@@ -44,4 +45,42 @@ export async function POST(req: Request) {
     ...building,
     createdAt: building.createdAt.toISOString(),
   });
+}
+
+export async function DELETE(req: Request) {
+  const session = await getAdminSession();
+  if (!session) {
+    return NextResponse.json({ message: "No autorizado" }, { status: 401 });
+  }
+
+  const { buildingId, password } = await req.json().catch(() => ({}));
+  if (!buildingId || !password) {
+    return NextResponse.json(
+      { message: "Edificio y contraseña son obligatorios" },
+      { status: 400 },
+    );
+  }
+
+  const admin = await prisma.adminUser.findUnique({ where: { id: session.id } });
+  if (!admin) {
+    return NextResponse.json({ message: "No autorizado" }, { status: 401 });
+  }
+
+  const isValidPassword = await compare(password, admin.passwordHash);
+  if (!isValidPassword) {
+    return NextResponse.json({ message: "Contraseña incorrecta" }, { status: 401 });
+  }
+
+  const buildingIdNumber = Number(buildingId);
+  if (!buildingIdNumber) {
+    return NextResponse.json({ message: "Edificio inválido" }, { status: 400 });
+  }
+
+  const existing = await prisma.building.findUnique({ where: { id: buildingIdNumber } });
+  if (!existing) {
+    return NextResponse.json({ message: "Edificio no encontrado" }, { status: 404 });
+  }
+
+  await prisma.building.delete({ where: { id: buildingIdNumber } });
+  return NextResponse.json({ ok: true });
 }
