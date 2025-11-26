@@ -8,6 +8,7 @@ export function calculateLateFee(
   originalAmount: number,
   dueDate2: Date,
   today = new Date(),
+  lateFeePercentage = 10,
 ): LateFeeResult {
   if (!dueDate2) {
     return { monthsLate: 0, lateAmount: 0, totalWithLate: originalAmount };
@@ -23,7 +24,8 @@ export function calculateLateFee(
         (end.getMonth() - start.getMonth()),
     ) || 0;
 
-  const lateAmount = roundTwo(originalAmount * 0.1 * monthsLate);
+  const rate = Math.max(0, Number(lateFeePercentage)) / 100;
+  const lateAmount = roundTwo(originalAmount * rate * monthsLate);
   const totalWithLate = roundTwo(originalAmount + lateAmount);
   return { monthsLate, lateAmount, totalWithLate };
 }

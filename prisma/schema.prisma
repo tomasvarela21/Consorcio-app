@@ -37,16 +37,16 @@ model Building {
 }
 
 model Unit {
-  id            Int               @id @default(autoincrement())
-  buildingId    Int
-  code          String
-  percentage    Decimal           @db.Decimal(10, 4)
-  accountStatus AccountStatus     @default(ON_TIME)
-  createdAt     DateTime          @default(now())
-  building      Building          @relation(fields: [buildingId], references: [id])
-  contacts      Contact[]
+  id                Int                @id @default(autoincrement())
+  buildingId        Int
+  code              String
+  percentage        Decimal            @db.Decimal(10, 4)
+  accountStatus     AccountStatus      @default(ON_TIME)
+  createdAt         DateTime           @default(now())
+  building          Building           @relation(fields: [buildingId], references: [id])
+  contacts          Contact[]
   settlementCharges SettlementCharge[]
-  payments      Payment[]
+  payments          Payment[]
 
   @@unique([buildingId, code])
   @@map("units")
@@ -67,17 +67,18 @@ model Contact {
 }
 
 model Settlement {
-  id           Int                @id @default(autoincrement())
-  buildingId   Int
-  month        Int
-  year         Int
-  totalExpense Decimal            @db.Decimal(12, 2)
-  dueDate1     DateTime?
-  dueDate2     DateTime?
-  createdAt    DateTime           @default(now())
-  building     Building           @relation(fields: [buildingId], references: [id])
-  charges      SettlementCharge[]
-  payments     Payment[]
+  id                Int                @id @default(autoincrement())
+  buildingId        Int
+  month             Int
+  year              Int
+  totalExpense      Decimal            @db.Decimal(12, 2)
+  dueDate1          DateTime?
+  dueDate2          DateTime?
+  lateFeePercentage Decimal            @default(10) @db.Decimal(5, 2)
+  createdAt         DateTime           @default(now())
+  building          Building           @relation(fields: [buildingId], references: [id])
+  charges           SettlementCharge[]
+  payments          Payment[]
 
   @@unique([buildingId, month, year])
   @@map("settlements")
@@ -89,7 +90,7 @@ model SettlementCharge {
   unitId               Int
   previousBalance      Decimal      @db.Decimal(12, 2)
   currentFee           Decimal      @db.Decimal(12, 2)
-  partialPaymentsTotal Decimal      @db.Decimal(12, 2) @default(0)
+  partialPaymentsTotal Decimal      @default(0) @db.Decimal(12, 2)
   totalToPay           Decimal      @db.Decimal(12, 2)
   status               ChargeStatus
   settlement           Settlement   @relation(fields: [settlementId], references: [id])
@@ -99,16 +100,16 @@ model SettlementCharge {
 }
 
 model Payment {
-  id           Int        @id @default(autoincrement())
-  settlementId Int
-  unitId       Int
-  amount       Decimal    @db.Decimal(12, 2)
+  id            Int        @id @default(autoincrement())
+  settlementId  Int
+  unitId        Int
+  amount        Decimal    @db.Decimal(12, 2)
   receiptNumber String
-  paymentDate  DateTime
-  notes        String?
-  createdAt    DateTime   @default(now())
-  settlement   Settlement @relation(fields: [settlementId], references: [id])
-  unit         Unit       @relation(fields: [unitId], references: [id])
+  paymentDate   DateTime
+  notes         String?
+  createdAt     DateTime   @default(now())
+  settlement    Settlement @relation(fields: [settlementId], references: [id])
+  unit          Unit       @relation(fields: [unitId], references: [id])
 
   @@map("payments")
 }

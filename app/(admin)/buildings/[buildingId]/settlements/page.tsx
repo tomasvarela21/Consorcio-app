@@ -27,6 +27,7 @@ type SettlementSummary = {
   totalExpense: number;
   dueDate1: string | null;
   dueDate2: string | null;
+  lateFeePercentage?: number;
 } | null;
 
 type AccountHistory = {
@@ -71,6 +72,7 @@ export default function SettlementsPage() {
   const [totalExpense, setTotalExpense] = useState("");
   const [dueDate1, setDueDate1] = useState("");
   const [dueDate2, setDueDate2] = useState("");
+  const [lateFeePercentage, setLateFeePercentage] = useState("10");
 
   const [openPayment, setOpenPayment] = useState(false);
   const [selectedCharge, setSelectedCharge] = useState<ChargeRow | null>(null);
@@ -125,6 +127,7 @@ export default function SettlementsPage() {
         totalExpense: Number(totalExpense),
         dueDate1: dueDate1 || null,
         dueDate2: dueDate2 || null,
+        lateFeePercentage: Number(lateFeePercentage),
       }),
     });
     if (res.ok) {
@@ -267,6 +270,11 @@ export default function SettlementsPage() {
                 {settlement.dueDate1 ? new Date(settlement.dueDate1).toLocaleDateString("es-AR") : "N/A"}{" "}
                 ·{" "}
                 {settlement.dueDate2 ? new Date(settlement.dueDate2).toLocaleDateString("es-AR") : "N/A"}
+                {typeof settlement.lateFeePercentage === "number" && (
+                  <span className="ml-2 text-xs text-slate-500">
+                    Recargo morosos: {settlement.lateFeePercentage}%
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -352,6 +360,15 @@ export default function SettlementsPage() {
               step="0.01"
               value={totalExpense}
               onChange={(e) => setTotalExpense(e.target.value)}
+              required
+            />
+            <Input
+              label="Recargo morosos (%)"
+              type="number"
+              min="0"
+              step="0.1"
+              value={lateFeePercentage}
+              onChange={(e) => setLateFeePercentage(e.target.value)}
               required
             />
             <Input

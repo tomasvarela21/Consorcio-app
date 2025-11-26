@@ -57,6 +57,7 @@ export async function GET(
       Number(charge.totalToPay),
       charge.settlement.dueDate2,
       today,
+      Number(charge.settlement.lateFeePercentage ?? 10),
     );
     const key = charge.unitId;
     const responsable =

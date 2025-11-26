@@ -56,6 +56,7 @@ export async function GET(
         totalExpense: Number(settlement.totalExpense),
         dueDate1: settlement.dueDate1?.toISOString() ?? null,
         dueDate2: settlement.dueDate2?.toISOString() ?? null,
+        lateFeePercentage: Number(settlement.lateFeePercentage),
       },
       charges,
     });
@@ -74,6 +75,7 @@ export async function GET(
       totalExpense: Number(s.totalExpense),
       dueDate1: s.dueDate1?.toISOString() ?? null,
       dueDate2: s.dueDate2?.toISOString() ?? null,
+      lateFeePercentage: Number(s.lateFeePercentage),
       createdAt: s.createdAt.toISOString(),
     })),
   );
@@ -91,10 +93,18 @@ export async function POST(
   const buildingId = Number(buildingParam);
 
   const body = await req.json().catch(() => ({}));
-  const { month, year, totalExpense, dueDate1, dueDate2 } = body;
+  const { month, year, totalExpense, dueDate1, dueDate2, lateFeePercentage } = body;
   if (!month || !year || !totalExpense) {
     return NextResponse.json(
       { message: "Mes, año y gasto total son obligatorios" },
+      { status: 400 },
+    );
+  }
+
+  const lateFee = lateFeePercentage !== undefined ? Number(lateFeePercentage) : 10;
+  if (Number.isNaN(lateFee) || lateFee < 0) {
+    return NextResponse.json(
+      { message: "El recargo debe ser un número positivo" },
       { status: 400 },
     );
   }
@@ -115,6 +125,7 @@ export async function POST(
       totalExpense,
       dueDate1: dueDate1 ? new Date(dueDate1) : null,
       dueDate2: dueDate2 ? new Date(dueDate2) : null,
+      lateFeePercentage: lateFee,
     },
   });
 

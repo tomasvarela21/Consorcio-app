@@ -111,39 +111,31 @@ export default function BuildingsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {buildings.map((b) => (
           <Link key={b.id} href={`/buildings/${b.id}`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
-            <Card className="h-full p-5">
+            <Card className="relative h-full p-5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  openDeleteModal(b);
+                }}
+                className="absolute right-4 top-4 inline-flex items-center rounded-md border border-rose-100 bg-white/80 px-3 py-1 text-xs font-semibold text-rose-600 shadow-sm transition hover:bg-rose-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+                aria-label={`Eliminar ${b.name}`}
+              >
+                Eliminar
+              </button>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900">{b.name}</h3>
                   <p className="text-sm text-slate-500">{b.address}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                    {b._count?.units ?? 0} unidades
-                  </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      openDeleteModal(b);
-                    }}
-                    className="rounded-full p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
-                    aria-label={`Eliminar ${b.name}`}
-                  >
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 6h18" />
-                      <path d="M8 6v13c0 .552.448 1 1 1h6c.552 0 1-.448 1-1V6" />
-                      <path d="M10 10v6" />
-                      <path d="M14 10v6" />
-                      <path d="M9 6l1-2h4l1 2" />
-                    </svg>
-                  </button>
-                </div>
               </div>
               <div className="mt-4 flex items-center justify-between text-sm text-slate-500">
                 <p>Liquidaciones: {b._count?.settlements ?? 0}</p>
                 <span className="font-semibold text-slate-900">Ingresar</span>
+              </div>
+              <div className="mt-2 text-sm text-slate-500">
+                Unidades: <span className="font-semibold text-slate-900">{b._count?.units ?? 0}</span>
               </div>
             </Card>
           </Link>

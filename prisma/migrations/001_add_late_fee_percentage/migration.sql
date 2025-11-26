@@ -1,0 +1,2 @@
+ALTER TABLE "settlements"
+ADD COLUMN "lateFeePercentage" DECIMAL(5,2) NOT NULL DEFAULT 10;
