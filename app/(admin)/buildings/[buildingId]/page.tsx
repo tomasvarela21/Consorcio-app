@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Table, THead, Th, TBody, Tr, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { formatCurrency } from "@/lib/format";
 
 export default async function BuildingOverview({
   params,
@@ -56,9 +57,12 @@ export default async function BuildingOverview({
     prisma.settlementCharge.groupBy({
       by: ["unitId"],
       where: {
-        settlement: { buildingId },
+        settlement: {
+          buildingId,
+          dueDate2: { lt: today },
+          NOT: { dueDate2: null },
+        },
         totalToPay: { gt: 0 },
-        status: { in: ["PENDING", "PARTIAL"] },
       },
     }),
     prisma.settlement.findFirst({
@@ -132,10 +136,7 @@ export default async function BuildingOverview({
           <Card className="p-5 h-full">
             <p className="text-sm text-slate-500">Total expensas del mes</p>
             <p className="text-2xl font-semibold text-slate-900">
-              $
-              {totalExpensasMes.toLocaleString("es-AR", {
-                minimumFractionDigits: 2,
-              })}
+              {formatCurrency(totalExpensasMes)}
             </p>
             <p className="text-xs text-slate-500 mt-1">Este mes</p>
           </Card>
@@ -147,10 +148,7 @@ export default async function BuildingOverview({
           <Card className="p-5 h-full">
             <p className="text-sm text-slate-500">Pagos cobrados este mes</p>
             <p className="text-2xl font-semibold text-slate-900">
-              $
-              {pagosMes.toLocaleString("es-AR", {
-                minimumFractionDigits: 2,
-              })}
+              {formatCurrency(pagosMes)}
             </p>
             <p className="text-xs text-slate-500 mt-1">
               Liquidaciones del mes
@@ -164,10 +162,7 @@ export default async function BuildingOverview({
           <Card className="p-5 h-full">
             <p className="text-sm text-slate-500">Deuda total del mes</p>
             <p className="text-2xl font-semibold text-slate-900">
-              $
-              {deudaMes.toLocaleString("es-AR", {
-                minimumFractionDigits: 2,
-              })}
+              {formatCurrency(deudaMes)}
             </p>
             <p className="text-xs text-slate-500 mt-1">Pendiente del periodo</p>
           </Card>
@@ -177,13 +172,11 @@ export default async function BuildingOverview({
           className="block transition hover:-translate-y-0.5 hover:shadow-md"
         >
           <Card className="p-5 h-full">
-            <p className="text-sm text-slate-500">
-              Unidades morosas (vencidas)
-            </p>
+            <p className="text-sm text-slate-500">Unidades morosas</p>
             <p className="text-2xl font-semibold text-slate-900">
-              {morososVencidos.length}
+              {debtorsCount.length}
             </p>
-            <p className="text-xs text-slate-500 mt-1">Con deuda vencida</p>
+            <p className="text-xs text-slate-500 mt-1">Registradas en morosos</p>
           </Card>
         </Link>
       </div>
@@ -275,7 +268,7 @@ export default async function BuildingOverview({
                 <Td>
                   {s.month}/{s.year}
                 </Td>
-                <Td>${Number(s.totalExpense).toFixed(2)}</Td>
+                <Td>{formatCurrency(Number(s.totalExpense))}</Td>
                 <Td className="space-x-2">
                   {s.dueDate1 && (
                     <Badge variant="info">
@@ -388,12 +381,7 @@ export default async function BuildingOverview({
                   <Td>{v.unitCode}</Td>
                   <Td>{v.responsable}</Td>
                   <Td>{v.fecha?.toLocaleDateString("es-AR")}</Td>
-                  <Td className="text-right">
-                    $
-                    {v.monto.toLocaleString("es-AR", {
-                      minimumFractionDigits: 2,
-                    })}
-                  </Td>
+                  <Td className="text-right">{formatCurrency(v.monto)}</Td>
                 </Tr>
               ))}
             </TBody>

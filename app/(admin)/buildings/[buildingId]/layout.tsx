@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { calculateLateFee } from "@/lib/billing";
+import { formatCurrency } from "@/lib/format";
 
 export default async function BuildingLayout({
   children,
@@ -19,16 +21,22 @@ export default async function BuildingLayout({
     redirect("/buildings");
   }
 
+  const today = new Date();
+
   const [building, unitsCount, chargesPending, lastSettlement] =
     await Promise.all([
       prisma.building.findUnique({ where: { id: buildingId } }),
       prisma.unit.count({ where: { buildingId } }),
-      prisma.settlementCharge.aggregate({
-        _sum: { totalToPay: true },
+      prisma.settlementCharge.findMany({
         where: {
-          settlement: { buildingId },
-          status: { in: ["PENDING", "PARTIAL"] },
+          settlement: {
+            buildingId,
+            dueDate2: { lt: today },
+            NOT: { dueDate2: null },
+          },
+          totalToPay: { gt: 0 },
         },
+        include: { settlement: true },
       }),
       prisma.settlement.findFirst({
         where: { buildingId },
@@ -40,7 +48,21 @@ export default async function BuildingLayout({
     redirect("/buildings");
   }
 
-  const deudaTotal = Number(chargesPending._sum.totalToPay ?? 0);
+  const deudaTotal = chargesPending.reduce((acc, charge) => {
+    const dueDate = charge.settlement.dueDate2;
+    if (!dueDate) {
+      return acc;
+    }
+    const baseDebt = Number(charge.previousBalance) + Number(charge.currentFee);
+    const { totalWithLate } = calculateLateFee(
+      baseDebt,
+      dueDate,
+      today,
+      Number(charge.settlement.lateFeePercentage ?? 10),
+    );
+    const payments = Number(charge.partialPaymentsTotal ?? 0);
+    return acc + Math.max(0, totalWithLate - payments);
+  }, 0);
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
@@ -58,7 +80,9 @@ export default async function BuildingLayout({
               ← Volver al dashboard
             </Link>
             <p className="text-xs uppercase tracking-wide text-slate-300">Edificio</p>
-            <h1 className="text-xl font-semibold text-white">{building.name}</h1>
+            <h1 className="text-xl font-semibold text-white underline decoration-white/60 underline-offset-4">
+              {building.name}
+            </h1>
             <p className="text-sm text-slate-300">{building.address}</p>
             <div className="mt-3 space-y-1 text-sm text-slate-200/90">
               <p>
@@ -68,7 +92,7 @@ export default async function BuildingLayout({
               <p>
                 Deuda estimada:{" "}
                 <span className="font-semibold text-white">
-                  ${deudaTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                  {formatCurrency(deudaTotal)}
                 </span>
               </p>
               <p className="text-xs text-slate-300">

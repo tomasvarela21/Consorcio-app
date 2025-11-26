@@ -46,19 +46,26 @@ export async function GET(
         originalDebt: number;
         monthsLate: number;
         lateAmount: number;
-        totalWithLate: number;
+        latePercentage: number;
+        frozenTotal: number;
+        payments: number;
+        pendingAmount: number;
       }>;
     }
   > = {};
 
   charges.forEach((charge) => {
     if (!charge.settlement.dueDate2) return;
+    const baseDebt = Number(charge.previousBalance) + Number(charge.currentFee);
+    const rate = Number(charge.settlement.lateFeePercentage ?? 10);
     const { monthsLate, lateAmount, totalWithLate } = calculateLateFee(
-      Number(charge.totalToPay),
+      baseDebt,
       charge.settlement.dueDate2,
       today,
-      Number(charge.settlement.lateFeePercentage ?? 10),
+      rate,
     );
+    const payments = Number(charge.partialPaymentsTotal ?? 0);
+    const pendingAmount = Math.max(0, totalWithLate - payments);
     const key = charge.unitId;
     const responsable =
       charge.unit.contacts.find((c) => c.role === "RESPONSABLE")?.fullName ??
@@ -72,19 +79,22 @@ export async function GET(
       };
     }
     grouped[key].periods.push({
-      settlementId: charge.settlementId,
-      month: charge.settlement.month,
-      year: charge.settlement.year,
-      originalDebt: Number(charge.totalToPay),
-      monthsLate,
-      lateAmount,
-      totalWithLate,
+        settlementId: charge.settlementId,
+        month: charge.settlement.month,
+        year: charge.settlement.year,
+        originalDebt: baseDebt,
+        monthsLate,
+        lateAmount,
+        latePercentage: rate,
+        frozenTotal: totalWithLate,
+        payments,
+        pendingAmount,
     });
   });
 
   const result = Object.values(grouped).map((item) => ({
     ...item,
-    totalDebt: item.periods.reduce((acc, p) => acc + p.totalWithLate, 0),
+    totalDebt: item.periods.reduce((acc, p) => acc + p.pendingAmount, 0),
   }));
 
   return NextResponse.json(result);

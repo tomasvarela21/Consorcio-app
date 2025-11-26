@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { formatCurrency } from "@/lib/format";
 
 type ChargeRow = {
   id: number;
@@ -16,6 +17,7 @@ type ChargeRow = {
   responsable: string;
   previousBalance: number;
   currentFee: number;
+  partialPaymentsTotal: number;
   totalToPay: number;
   status: string;
 };
@@ -83,6 +85,25 @@ export default function SettlementsPage() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountData, setAccountData] = useState<AccountHistory>(null);
 
+  const currentPeriodPartial = (charge: Partial<ChargeRow>) => {
+    const partials = Number(charge.partialPaymentsTotal ?? 0);
+    const previous = Number(charge.previousBalance ?? 0);
+    const diff = partials - previous;
+    return diff > 0 ? diff : 0;
+  };
+
+  const currentPeriodDue = (charge: Partial<ChargeRow>) => {
+    const partials = currentPeriodPartial(charge);
+    return Math.max(0, Number(charge.currentFee ?? 0) - partials);
+  };
+
+  const moneyOrDash = (value: number) =>
+    Math.abs(value) < 0.005 ? (
+      <span className="inline-block w-full text-center">-</span>
+    ) : (
+      <span>{formatCurrency(value)}</span>
+    );
+
   const loadData = async () => {
     setLoading(true);
     const res = await fetch(
@@ -144,7 +165,7 @@ export default function SettlementsPage() {
 
   const openPayModal = (charge: ChargeRow) => {
     setSelectedCharge(charge);
-    setPayAmount(charge.totalToPay.toString());
+    setPayAmount(currentPeriodDue(charge).toString());
     setReceiptNumber("");
     setPaymentDate(today.toISOString().slice(0, 10));
     setOpenPayment(true);
@@ -237,13 +258,13 @@ export default function SettlementsPage() {
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <p className="text-sm text-slate-500">Gasto total período</p>
             <p className="text-2xl font-semibold">
-              ${summary.totalExpense?.toLocaleString("es-AR", { minimumFractionDigits: 2 }) ?? "0,00"}
+              {formatCurrency(summary.totalExpense ?? 0)}
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <p className="text-sm text-slate-500">Cobrado</p>
             <p className="text-2xl font-semibold">
-              ${summary.collected?.toLocaleString("es-AR", { minimumFractionDigits: 2 }) ?? "0,00"}
+              {formatCurrency(summary.collected ?? 0)}
             </p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -263,7 +284,7 @@ export default function SettlementsPage() {
                 Período {settlement.month}/{settlement.year}
               </p>
               <p className="text-lg font-semibold text-slate-900">
-                Gasto total: ${settlement.totalExpense.toFixed(2)}
+                Gasto total: {formatCurrency(settlement.totalExpense)}
               </p>
               <p className="text-sm text-slate-500">
                 Vencimientos:{" "}
@@ -291,8 +312,8 @@ export default function SettlementsPage() {
             <tr>
               <Th>Unidad</Th>
               <Th>Responsable</Th>
-              <Th className="text-right">Saldo anterior</Th>
               <Th className="text-right">Expensa actual</Th>
+              <Th className="text-right">Pago parcial</Th>
               <Th className="text-right">Total a pagar</Th>
               <Th>Estado</Th>
               <Th>Acciones</Th>
@@ -308,9 +329,9 @@ export default function SettlementsPage() {
               <Tr key={c.id}>
                 <Td className="font-semibold">{c.unitCode}</Td>
                 <Td>{c.responsable}</Td>
-                <Td className="text-right">${c.previousBalance.toFixed(2)}</Td>
-                <Td className="text-right">${c.currentFee.toFixed(2)}</Td>
-                <Td className="text-right font-semibold">${c.totalToPay.toFixed(2)}</Td>
+                <Td className="text-right">{moneyOrDash(c.currentFee)}</Td>
+                <Td className="text-right">{moneyOrDash(currentPeriodPartial(c))}</Td>
+                <Td className="text-right font-semibold">{moneyOrDash(currentPeriodDue(c))}</Td>
                 <Td>
                   <Badge variant={statusColor(c.status)}>
                     {c.status === "PENDING" && "Pendiente"}
@@ -430,11 +451,11 @@ export default function SettlementsPage() {
                     <Badge variant={statusColor(p.status)}>{p.status}</Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
-                    <span>Saldo anterior: ${p.previousBalance.toFixed(2)}</span>
-                    <span>Expensa mes: ${p.currentFee.toFixed(2)}</span>
-                    <span>Pagos parciales: ${p.partialPaymentsTotal.toFixed(2)}</span>
+                    <span>Saldo anterior: {formatCurrency(p.previousBalance)}</span>
+                    <span>Expensa mes: {formatCurrency(p.currentFee)}</span>
+                    <span>Pagos parciales: {formatCurrency(p.partialPaymentsTotal)}</span>
                     <span className="font-semibold text-slate-900">
-                      Total: ${p.totalToPay.toFixed(2)}
+                      Total: {formatCurrency(p.totalToPay)}
                     </span>
                   </div>
                   {p.payments.length > 0 && (
@@ -443,7 +464,7 @@ export default function SettlementsPage() {
                       <ul className="list-disc pl-5">
                         {p.payments.map((pay) => (
                           <li key={pay.id}>
-                            {new Date(pay.paymentDate).toLocaleDateString("es-AR")} · ${pay.amount.toFixed(2)} · Recibo{" "}
+                            {new Date(pay.paymentDate).toLocaleDateString("es-AR")} · {formatCurrency(pay.amount)} · Recibo{" "}
                             {pay.receiptNumber}
                           </li>
                         ))}

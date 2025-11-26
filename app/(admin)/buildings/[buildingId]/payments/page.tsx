@@ -6,6 +6,7 @@ import { Table, THead, Th, TBody, Tr, Td } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast";
 import { Modal } from "@/components/ui/modal";
+import { formatCurrency } from "@/lib/format";
 
 type PaymentRow = {
   id: number;
@@ -176,7 +177,7 @@ export default function PaymentsPage() {
               <Td>
                 {p.settlement.month}/{p.settlement.year}
               </Td>
-              <Td className="text-right font-semibold">${p.amount.toFixed(2)}</Td>
+              <Td className="text-right font-semibold">{formatCurrency(p.amount)}</Td>
               <Td>
                 <Button variant="ghost" onClick={() => openDetailModal(p)}>
                   Ver detalle
@@ -226,7 +227,7 @@ export default function PaymentsPage() {
               <span className="font-semibold">Recibo:</span> {selected.receiptNumber}
             </p>
             <p>
-              <span className="font-semibold">Monto:</span> ${selected.amount.toFixed(2)}
+              <span className="font-semibold">Monto:</span> {formatCurrency(selected.amount)}
             </p>
           </div>
         ) : (

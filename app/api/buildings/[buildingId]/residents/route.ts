@@ -68,13 +68,32 @@ export async function GET(
     }),
   ]);
 
+  const unitIds = units.map((u) => u.id);
+  let overdueUnits = new Set<number>();
+  if (unitIds.length > 0) {
+    const today = new Date();
+    const overdueCharges = await prisma.settlementCharge.findMany({
+      where: {
+        unitId: { in: unitIds },
+        totalToPay: { gt: 0 },
+        settlement: {
+          dueDate2: { lt: today },
+          NOT: { dueDate2: null },
+        },
+      },
+      select: { unitId: true },
+    });
+    overdueUnits = new Set(overdueCharges.map((c) => c.unitId));
+  }
+
   const data = units.map((u) => {
     const responsible = u.contacts.find((c) => c.role === "RESPONSABLE");
+    const hasDebt = overdueUnits.has(u.id);
     return {
       id: u.id,
       code: u.code,
       percentage: Number(u.percentage),
-      accountStatus: u.accountStatus ?? "ON_TIME",
+      accountStatus: hasDebt ? "WITH_DEBT" : "ON_TIME",
       responsible: responsible?.fullName ?? null,
     };
   });

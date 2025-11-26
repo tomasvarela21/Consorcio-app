@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth";
+import { formatCurrency } from "@/lib/format";
 
 type Params = {
   paymentId: string;
@@ -53,7 +54,7 @@ export async function GET(
   doc.text(`Unidad: ${payment.unit.code}`);
   doc.text(`Responsable: ${responsable}`);
   doc.moveDown();
-  doc.text(`Monto pagado: $${Number(payment.amount).toFixed(2)}`);
+  doc.text(`Monto pagado: ${formatCurrency(Number(payment.amount))}`);
   doc.text(`Número de recibo: ${payment.receiptNumber}`);
   doc.text(
     `Fecha de pago: ${payment.paymentDate.toLocaleDateString("es-AR")}`,

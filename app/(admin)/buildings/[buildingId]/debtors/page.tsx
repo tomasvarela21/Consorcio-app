@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { Table, THead, Th, TBody, Tr, Td } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { formatCurrency } from "@/lib/format";
 
 type Debtor = {
   unitId: number;
@@ -19,14 +20,18 @@ type Debtor = {
     year: number;
     originalDebt: number;
     monthsLate: number;
+    latePercentage: number;
     lateAmount: number;
-    totalWithLate: number;
+    frozenTotal: number;
+    payments: number;
+    pendingAmount: number;
   }>;
 };
 
 export default function DebtorsPage() {
   const params = useParams<{ buildingId: string }>();
   const buildingId = Number(params.buildingId);
+  const router = useRouter();
 
   const [unitFilter, setUnitFilter] = useState("");
   const [responsibleFilter, setResponsibleFilter] = useState("");
@@ -74,9 +79,9 @@ export default function DebtorsPage() {
 
   const openPayModal = (debtor: Debtor) => {
     setSelected(debtor);
-    const period = debtor.periods[0];
+    const period = debtor.periods.find((p) => p.pendingAmount > 0) ?? debtor.periods[0];
     setSelectedPeriodId(period?.settlementId ?? null);
-    setPayAmount(period ? period.totalWithLate.toString() : "");
+    setPayAmount(period ? period.pendingAmount.toString() : "");
     setReceiptNumber("");
     setOpenPay(true);
   };
@@ -101,6 +106,7 @@ export default function DebtorsPage() {
       toast.success("Pago aplicado");
       setOpenPay(false);
       load();
+      router.refresh();
     } else {
       const body = await res.json().catch(() => ({}));
       toast.error(body.message ?? "No se pudo registrar el pago");
@@ -163,7 +169,7 @@ export default function DebtorsPage() {
                   ))}
                 </div>
               </Td>
-              <Td className="text-right font-semibold">${d.totalDebt.toFixed(2)}</Td>
+              <Td className="text-right font-semibold">{formatCurrency(d.totalDebt)}</Td>
               <Td className="space-x-2">
                 <Button variant="secondary" onClick={() => openDetailModal(d)}>
                   Ver detalle
@@ -191,12 +197,23 @@ export default function DebtorsPage() {
                   <span>
                     {p.month}/{p.year}
                   </span>
-                  <span>${p.totalWithLate.toFixed(2)}</span>
+                  <span>{formatCurrency(p.pendingAmount)}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-slate-600">
-                  <span>Saldo original: ${p.originalDebt.toFixed(2)}</span>
-                  <span>Recargo: ${p.lateAmount.toFixed(2)}</span>
+                <div className="grid gap-2 text-slate-600 md:grid-cols-2">
+                  <span>Deuda base: {formatCurrency(p.originalDebt)}</span>
                   <span>Meses de atraso: {p.monthsLate}</span>
+                  <span>
+                    Recargo ({p.latePercentage}%): {formatCurrency(p.lateAmount)}
+                  </span>
+                  <span className="font-semibold text-slate-900">
+                    Total fijo: {formatCurrency(p.frozenTotal)}
+                  </span>
+                  <span>
+                    Pagos parciales aplicados: {formatCurrency(p.payments)}
+                  </span>
+                  <span className="col-span-2 font-semibold text-slate-900">
+                    Deuda total actual: {formatCurrency(p.pendingAmount)}
+                  </span>
                 </div>
               </div>
             ))}
@@ -222,12 +239,12 @@ export default function DebtorsPage() {
                   const id = Number(e.target.value);
                   setSelectedPeriodId(id);
                   const period = selected.periods.find((p) => p.settlementId === id);
-                  if (period) setPayAmount(period.totalWithLate.toString());
+                  if (period) setPayAmount(period.pendingAmount.toString());
                 }}
               >
                 {selected.periods.map((p) => (
                   <option key={p.settlementId} value={p.settlementId}>
-                    {p.month}/{p.year} · ${p.totalWithLate.toFixed(2)}
+                    {p.month}/{p.year} · {formatCurrency(p.pendingAmount)}
                   </option>
                 ))}
               </select>

@@ -2,15 +2,31 @@ import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/card";
 import { Table, THead, Th, TBody, Tr, Td } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { calculateLateFee } from "@/lib/billing";
+import { formatCurrency } from "@/lib/format";
 
 export default async function DashboardPage() {
-  const [buildingsCount, unitsCount, pendingCharges, latestPayments] =
+  const today = new Date();
+  const currentMonth = today.getMonth() + 1;
+  const currentYear = today.getFullYear();
+
+  const [buildingsCount, unitsCount, currentMonthCharges, overdueCharges, latestPayments] =
     await Promise.all([
       prisma.building.count(),
       prisma.unit.count(),
       prisma.settlementCharge.aggregate({
         _sum: { totalToPay: true },
-        where: { status: { in: ["PENDING", "PARTIAL"] } },
+        where: { settlement: { month: currentMonth, year: currentYear } },
+      }),
+      prisma.settlementCharge.findMany({
+        where: {
+          totalToPay: { gt: 0 },
+          settlement: {
+            dueDate2: { lt: today },
+            NOT: { dueDate2: null },
+          },
+        },
+        include: { settlement: true },
       }),
       prisma.payment.findMany({
         include: { unit: true, settlement: true },
@@ -19,14 +35,29 @@ export default async function DashboardPage() {
       }),
     ]);
 
+  const morososDebt = overdueCharges.reduce((acc, charge) => {
+    const dueDate = charge.settlement.dueDate2;
+    if (!dueDate) return acc;
+    const baseDebt = Number(charge.previousBalance) + Number(charge.currentFee);
+    const { totalWithLate } = calculateLateFee(
+      baseDebt,
+      dueDate,
+      today,
+      Number(charge.settlement.lateFeePercentage ?? 10),
+    );
+    const payments = Number(charge.partialPaymentsTotal ?? 0);
+    return acc + Math.max(0, totalWithLate - payments);
+  }, 0);
+
+  const currentMonthDebt = Number(currentMonthCharges._sum.totalToPay ?? 0);
+  const openDebt = morososDebt + currentMonthDebt;
+
   const metrics = [
     { label: "Edificios", value: buildingsCount },
     { label: "Unidades", value: unitsCount },
     {
       label: "Deuda abierta",
-      value: pendingCharges._sum.totalToPay
-        ? `$${Number(pendingCharges._sum.totalToPay).toFixed(2)}`
-        : "$0",
+      value: formatCurrency(openDebt),
     },
   ];
 
@@ -65,7 +96,7 @@ export default async function DashboardPage() {
                   {p.settlement.month}/{p.settlement.year}
                 </Td>
                 <Td className="text-right font-semibold">
-                  ${Number(p.amount).toFixed(2)}
+                  {formatCurrency(Number(p.amount))}
                 </Td>
               </Tr>
             ))}
