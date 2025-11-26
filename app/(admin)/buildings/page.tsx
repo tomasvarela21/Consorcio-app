@@ -69,11 +69,19 @@ export default function BuildingsPage() {
     setDeleteOpen(true);
   };
 
-  const closeDeleteModal = (force = false) => {
-    if (deleteLoading && !force) return;
+  const resetDeleteModal = () => {
     setDeleteOpen(false);
     setSelectedBuilding(null);
     setDeletePassword("");
+  };
+
+  const closeDeleteModal = () => {
+    if (deleteLoading) return;
+    resetDeleteModal();
+  };
+
+  const forceCloseDeleteModal = () => {
+    resetDeleteModal();
   };
 
   const handleDelete = async (e: React.FormEvent) => {
@@ -89,7 +97,7 @@ export default function BuildingsPage() {
       toast.success("Edificio eliminado");
       setBuildings((prev) => prev.filter((b) => b.id !== selectedBuilding.id));
       setDeleteLoading(false);
-      closeDeleteModal(true);
+      forceCloseDeleteModal();
       return;
     } else {
       const body = await res.json().catch(() => ({}));
