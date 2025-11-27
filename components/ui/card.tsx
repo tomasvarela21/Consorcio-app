@@ -17,12 +17,12 @@ export function Card({ className, title, description, actions, children }: CardP
       )}
     >
       {(title || description || actions) && (
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200/50 px-5 py-4">
+        <div className="flex flex-col gap-3 border-b border-slate-200/50 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             {title && <h3 className="text-lg font-semibold text-slate-900">{title}</h3>}
             {description && <p className="text-sm text-slate-500">{description}</p>}
           </div>
-          {actions}
+          {actions && <div className="flex flex-col gap-2 sm:flex-row sm:items-center">{actions}</div>}
         </div>
       )}
       <div className="p-5">{children}</div>

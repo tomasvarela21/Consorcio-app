@@ -108,7 +108,7 @@ export default function BuildingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Edificios</h1>
           <p className="text-sm text-slate-500">Gestiona tus consorcios y unidades.</p>
@@ -116,7 +116,7 @@ export default function BuildingsPage() {
         <Button onClick={() => setOpen(true)}>Nuevo edificio</Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {buildings.map((b) => (
           <Link key={b.id} href={`/buildings/${b.id}`} className="block transition hover:-translate-y-0.5 hover:shadow-md">
             <Card className="relative h-full p-5">

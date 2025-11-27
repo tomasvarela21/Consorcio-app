@@ -128,7 +128,7 @@ export default async function BuildingOverview({
         <h1 className="text-3xl font-semibold text-slate-900">Edificio</h1>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Link
           href={`/buildings/${buildingId}/settlements`}
           className="block transition hover:-translate-y-0.5 hover:shadow-md"
@@ -181,13 +181,13 @@ export default async function BuildingOverview({
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link
           href={`/buildings/${buildingId}/debtors`}
           className="block transition hover:-translate-y-0.5 hover:shadow-md"
         >
           <Card className="p-4 h-full">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-slate-500">Pagos vencidos</p>
                 <p className="text-2xl font-semibold text-red-600">
@@ -203,7 +203,7 @@ export default async function BuildingOverview({
           className="block transition hover:-translate-y-0.5 hover:shadow-md"
         >
           <Card className="p-4 h-full">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-slate-500">Por vencer (7 dias)</p>
                 <p className="text-2xl font-semibold text-amber-600">
@@ -219,7 +219,7 @@ export default async function BuildingOverview({
           className="block transition hover:-translate-y-0.5 hover:shadow-md"
         >
           <Card className="p-4 h-full">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-slate-500">
                   Pagos registrados este mes
@@ -237,7 +237,7 @@ export default async function BuildingOverview({
       <Card
         title="Últimas liquidaciones"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Link href={`/buildings/${buildingId}/settlements`}>
               <Button variant="secondary">Ver liquidaciones</Button>
             </Link>

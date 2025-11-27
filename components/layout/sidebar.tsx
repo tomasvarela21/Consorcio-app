@@ -9,11 +9,19 @@ const links = [
   { href: "/buildings", label: "Edificios" },
 ];
 
-export function Sidebar() {
+type SidebarProps = {
+  className?: string;
+  onNavigate?: () => void;
+};
+
+export function Sidebar({ className, onNavigate }: SidebarProps) {
   const pathname = usePathname();
   return (
     <aside
-      className="global-sidebar flex min-h-screen w-64 flex-col gap-6 self-stretch border-r border-slate-900/40 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 px-5 py-8 text-slate-100 shadow-xl"
+      className={clsx(
+        "global-sidebar flex min-h-screen w-64 flex-col gap-6 self-stretch border-r border-slate-900/40 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 px-5 py-8 text-slate-100 shadow-xl",
+        className,
+      )}
     >
       <div className="space-y-2 px-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-400/80">
@@ -35,6 +43,7 @@ export function Sidebar() {
                   ? "bg-white/15 text-white shadow-lg shadow-black/20"
                   : "text-slate-200 hover:bg-white/10",
               )}
+              onClick={onNavigate}
             >
               {link.label}
             </Link>

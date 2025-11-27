@@ -1,6 +1,5 @@
 import { clsx } from "clsx";
 import type {
-  HTMLAttributes,
   TableHTMLAttributes,
   TdHTMLAttributes,
   ThHTMLAttributes,
@@ -14,13 +13,15 @@ export function Table({
   return (
     <div
       className={clsx(
-        "overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm",
+        "rounded-lg border border-slate-200 bg-white shadow-sm",
         className,
       )}
     >
-      <table className="min-w-full divide-y divide-slate-200 text-sm" {...props}>
-        {children}
-      </table>
+      <div className="w-full overflow-x-auto">
+        <table className="min-w-full divide-y divide-slate-200 text-sm" {...props}>
+          {children}
+        </table>
+      </div>
     </div>
   );
 }

@@ -65,11 +65,11 @@ export default async function BuildingLayout({
   }, 0);
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row">
+    <div className="flex w-full flex-col gap-4 lg:flex-row">
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            .global-sidebar { display: none !important; }
+            .admin-shell-sidebar { display: none !important; }
           `,
         }}
       />
