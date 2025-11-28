@@ -57,7 +57,7 @@ export async function GET(
     ];
   }
 
-  const [total, units] = await Promise.all([
+  const [total, units, percentageAgg] = await Promise.all([
     prisma.unit.count({ where }),
     prisma.unit.findMany({
       where,
@@ -65,6 +65,10 @@ export async function GET(
       skip,
       take: pageSize,
       orderBy: { code: "asc" },
+    }),
+    prisma.unit.aggregate({
+      where: { buildingId },
+      _sum: { percentage: true },
     }),
   ]);
 
@@ -103,5 +107,6 @@ export async function GET(
     page,
     pageSize,
     data,
+    percentageSum: Number(percentageAgg._sum.percentage ?? 0),
   });
 }

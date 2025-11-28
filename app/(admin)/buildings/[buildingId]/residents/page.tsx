@@ -56,6 +56,7 @@ export default function ResidentsPage() {
   const [selected, setSelected] = useState<any>(null);
   const [unitCode, setUnitCode] = useState("");
   const [percentage, setPercentage] = useState("");
+  const [percentageCoverage, setPercentageCoverage] = useState(0);
 
   const [inquilino, setInquilino] = useState<ContactForm>(emptyContact());
   const [responsable, setResponsable] = useState<ContactForm>(emptyContact());
@@ -77,6 +78,7 @@ export default function ResidentsPage() {
       const body = await res.json();
       setData(body.data);
       setTotal(body.total);
+      setPercentageCoverage(body.percentageSum ?? 0);
     } else {
       toast.error("No pudimos cargar residentes");
     }
@@ -231,6 +233,8 @@ export default function ResidentsPage() {
         <Button onClick={() => setOpen(true)}>Registrar nuevo residente</Button>
       </div>
 
+      <PercentageCoverageAlert value={percentageCoverage} />
+
       <div className="flex items-center gap-3">
         <Input
           placeholder="Buscar por unidad o responsable"
@@ -335,7 +339,7 @@ export default function ResidentsPage() {
               label="Porcentaje (%)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.001"
               value={percentage}
               onChange={(e) => setPercentage(e.target.value)}
               required
@@ -450,7 +454,7 @@ export default function ResidentsPage() {
               label="Porcentaje (%)"
               type="number"
               min="0"
-              step="0.01"
+              step="0.001"
               value={percentage}
               onChange={(e) => setPercentage(e.target.value)}
               required
@@ -507,6 +511,33 @@ export default function ResidentsPage() {
           </div>
         </form>
       </Modal>
+    </div>
+  );
+}
+
+function PercentageCoverageAlert({ value }: { value: number }) {
+  const rounded = Math.round(value * 1000) / 1000;
+  const difference = Math.round((rounded - 100) * 1000) / 1000;
+  if (Math.abs(difference) < 0.001) {
+    return (
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        Cobertura porcentual total: <span className="font-semibold">{rounded}%</span>. Los gastos del período se distribuyen completamente.
+      </div>
+    );
+  }
+
+  const isShort = difference < 0;
+  const tone =
+    difference < 0
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+      : "border-rose-200 bg-rose-50 text-rose-800";
+  const label = isShort
+    ? `Falta asignar ${Math.abs(difference)}% para cubrir el 100% del gasto mensual.`
+    : `Los porcentajes superan el 100% en ${Math.abs(difference)}%. Ajusta las unidades para mantener un total exacto.`;
+
+  return (
+    <div className={`rounded-lg px-4 py-3 text-sm ${tone}`}>
+      Cobertura porcentual total: <span className="font-semibold">{rounded}%</span>. {label}
     </div>
   );
 }

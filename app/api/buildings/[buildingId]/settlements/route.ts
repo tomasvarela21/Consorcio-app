@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth";
 import { roundTwo } from "@/lib/billing";
 import { ChargeStatus, Prisma } from "@prisma/client";
+import { compare } from "bcryptjs";
 
 export async function GET(
   req: Request,
@@ -34,6 +35,14 @@ export async function GET(
     if (!settlement) {
       return NextResponse.json({ settlement: null, charges: [] });
     }
+    const coverage = settlement.charges.reduce(
+      (acc, charge) => acc + Number(charge.unit.percentage ?? 0),
+      0,
+    );
+    const uncoveredAmount = Math.max(
+      0,
+      Number(settlement.totalExpense) * (1 - coverage / 100),
+    );
     const charges = settlement.charges.map((c) => {
       const responsable = c.unit.contacts.find((ct) => ct.role === "RESPONSABLE");
       return {
@@ -57,6 +66,8 @@ export async function GET(
         dueDate1: settlement.dueDate1?.toISOString() ?? null,
         dueDate2: settlement.dueDate2?.toISOString() ?? null,
         lateFeePercentage: Number(settlement.lateFeePercentage),
+        percentageCoverage: coverage,
+        uncoveredAmount,
       },
       charges,
     });
@@ -129,22 +140,81 @@ export async function POST(
     },
   });
 
-  const chargesData: Prisma.SettlementChargeCreateManyInput[] = units.map((unit) => {
-    const currentFee = roundTwo(Number(totalExpense) * Number(unit.percentage) * 0.01);
-    const previousBalance = 0;
-    const totalToPay = roundTwo(previousBalance + currentFee);
-    return {
-      settlementId: settlement.id,
-      unitId: unit.id,
-      previousBalance,
-      currentFee,
-      partialPaymentsTotal: 0,
-      totalToPay,
-      status: ChargeStatus.PENDING,
-    };
-  });
+  const totalExpenseNumber = Number(totalExpense);
+  const chargesData: Prisma.SettlementChargeCreateManyInput[] = units.map(
+    (unit) => {
+      const percentageValue = Number(unit.percentage);
+      const currentFee = roundTwo(
+        totalExpenseNumber * (percentageValue / 100),
+      );
+      const previousBalance = 0;
+      const totalToPay = roundTwo(previousBalance + currentFee);
+      return {
+        settlementId: settlement.id,
+        unitId: unit.id,
+        previousBalance,
+        currentFee,
+        partialPaymentsTotal: 0,
+        totalToPay,
+        status: ChargeStatus.PENDING,
+      };
+    },
+  );
 
   await prisma.settlementCharge.createMany({ data: chargesData });
 
   return NextResponse.json({ settlementId: settlement.id });
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ buildingId: string }> },
+) {
+  const session = await getAdminSession();
+  if (!session) {
+    return NextResponse.json({ message: "No autorizado" }, { status: 401 });
+  }
+  const { buildingId: buildingParam } = await params;
+  const buildingId = Number(buildingParam);
+  if (!buildingId) {
+    return NextResponse.json({ message: "Edificio inválido" }, { status: 400 });
+  }
+
+  const { settlementId, password } = await req.json().catch(() => ({}));
+  if (!settlementId || !password) {
+    return NextResponse.json(
+      { message: "Liquidación y contraseña son obligatorias" },
+      { status: 400 },
+    );
+  }
+
+  const admin = await prisma.adminUser.findUnique({ where: { id: session.id } });
+  if (!admin) {
+    return NextResponse.json({ message: "No autorizado" }, { status: 401 });
+  }
+  const validPassword = await compare(password, admin.passwordHash);
+  if (!validPassword) {
+    return NextResponse.json({ message: "Contraseña incorrecta" }, { status: 401 });
+  }
+
+  const settlement = await prisma.settlement.findFirst({
+    where: { id: Number(settlementId), buildingId },
+    include: { payments: true },
+  });
+  if (!settlement) {
+    return NextResponse.json({ message: "Liquidación no encontrada" }, { status: 404 });
+  }
+  if (settlement.payments.length > 0) {
+    return NextResponse.json(
+      { message: "No se puede eliminar una liquidación con pagos registrados" },
+      { status: 400 },
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.settlementCharge.deleteMany({ where: { settlementId: settlement.id } }),
+    prisma.settlement.delete({ where: { id: settlement.id } }),
+  ]);
+
+  return NextResponse.json({ ok: true });
 }

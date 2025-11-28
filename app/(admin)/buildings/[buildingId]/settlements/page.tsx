@@ -30,6 +30,8 @@ type SettlementSummary = {
   dueDate1: string | null;
   dueDate2: string | null;
   lateFeePercentage?: number;
+  percentageCoverage?: number;
+  uncoveredAmount?: number;
 } | null;
 
 type AccountHistory = {
@@ -75,6 +77,9 @@ export default function SettlementsPage() {
   const [dueDate1, setDueDate1] = useState("");
   const [dueDate2, setDueDate2] = useState("");
   const [lateFeePercentage, setLateFeePercentage] = useState("10");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [openPayment, setOpenPayment] = useState(false);
   const [selectedCharge, setSelectedCharge] = useState<ChargeRow | null>(null);
@@ -250,8 +255,20 @@ export default function SettlementsPage() {
           </Button>
         </div>
         <div className="flex-1" />
+        {settlement && (
+          <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+            Eliminar liquidación
+          </Button>
+        )}
         <Button onClick={() => setOpenNew(true)}>Nueva liquidación</Button>
       </div>
+
+      {typeof settlement?.percentageCoverage === "number" && (
+        <CoverageNotice
+          value={settlement?.percentageCoverage ?? 0}
+          uncovered={settlement?.uncoveredAmount ?? 0}
+        />
+      )}
 
       {settlement && (
         <div className="grid gap-4 md:grid-cols-3">
@@ -414,6 +431,57 @@ export default function SettlementsPage() {
         </form>
       </Modal>
 
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Eliminar liquidación">
+        {settlement ? (
+          <form
+            className="space-y-4"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!settlement) return;
+              setDeleteLoading(true);
+              const res = await fetch(`/api/buildings/${buildingId}/settlements`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ settlementId: settlement.id, password: deletePassword }),
+              });
+              if (res.ok) {
+                toast.success("Liquidación eliminada");
+                setDeleteOpen(false);
+                setDeletePassword("");
+                setDeleteLoading(false);
+                loadData();
+              } else {
+                const body = await res.json().catch(() => ({}));
+                toast.error(body.message ?? "No pudimos eliminar la liquidación");
+                setDeleteLoading(false);
+              }
+            }}
+          >
+            <p className="text-sm text-slate-600">
+              Estás a punto de eliminar la liquidación {settlement.month}/{settlement.year}. Esta acción es permanente.
+              Confirma ingresando tu contraseña de administrador.
+            </p>
+            <Input
+              label="Contraseña"
+              type="password"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              required
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" type="button" onClick={() => setDeleteOpen(false)} disabled={deleteLoading}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="danger" loading={deleteLoading}>
+                Eliminar
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <p className="text-sm text-slate-500">No hay liquidación seleccionada.</p>
+        )}
+      </Modal>
+
       <Modal
         open={openPayment}
         onClose={() => setOpenPayment(false)}
@@ -479,6 +547,33 @@ export default function SettlementsPage() {
           <p className="text-sm text-slate-500">Cargando...</p>
         )}
       </Modal>
+    </div>
+  );
+}
+
+function CoverageNotice({ value, uncovered }: { value: number; uncovered: number }) {
+  const rounded = Math.round(value * 1000) / 1000;
+  const difference = Math.round((rounded - 100) * 1000) / 1000;
+  if (Math.abs(difference) < 0.001) {
+    return (
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        Porcentajes asignados: <span className="font-semibold">{rounded}%</span>. El gasto del mes se reparte correctamente.
+      </div>
+    );
+  }
+
+  const isShort = difference < 0;
+  const tone =
+    difference < 0
+      ? "border-amber-200 bg-amber-50 text-amber-800"
+      : "border-rose-200 bg-rose-50 text-rose-800";
+  const label = isShort
+    ? `Faltan asignar ${Math.abs(difference)}% para cubrir el 100% del gasto mensual. Monto no cubierto: ${formatCurrency(Math.max(uncovered, 0))}.`
+    : `Los porcentajes superan el 100% en ${Math.abs(difference)}%. Ajusta las unidades antes de generar la liquidación.`;
+
+  return (
+    <div className={`rounded-lg px-4 py-3 text-sm ${tone}`}>
+      Porcentajes asignados: <span className="font-semibold">{rounded}%</span>. {label}
     </div>
   );
 }
