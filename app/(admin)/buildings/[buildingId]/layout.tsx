@@ -1,12 +1,8 @@
 import { ReactNode } from "react";
 import { prisma } from "@/lib/prisma";
-import { BuildingNav } from "@/components/buildings/building-nav";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { calculateLateFee } from "@/lib/billing";
-import { formatCurrency } from "@/lib/format";
+import { BuildingSidebar } from "@/components/buildings/building-sidebar";
 
 export default async function BuildingLayout({
   children,
@@ -48,6 +44,12 @@ export default async function BuildingLayout({
     redirect("/buildings");
   }
 
+  const buildingInfo = {
+    id: building.id,
+    name: building.name,
+    address: building.address,
+  };
+
   const deudaTotal = chargesPending.reduce((acc, charge) => {
     const dueDate = charge.settlement.dueDate2;
     if (!dueDate) {
@@ -64,58 +66,47 @@ export default async function BuildingLayout({
     return acc + Math.max(0, totalWithLate - payments);
   }, 0);
 
+  const safeLastSettlement = lastSettlement
+    ? {
+        id: lastSettlement.id,
+        buildingId: lastSettlement.buildingId,
+        month: lastSettlement.month,
+        year: lastSettlement.year,
+        dueDate1: lastSettlement.dueDate1,
+        dueDate2: lastSettlement.dueDate2,
+      }
+    : null;
+
   return (
-    <div className="flex w-full flex-col gap-4 lg:flex-row">
+    <div className="building-view relative flex w-full flex-col gap-6">
       <style
         dangerouslySetInnerHTML={{
           __html: `
-            .admin-shell-sidebar { display: none !important; }
+            .admin-shell-sidebar {
+              opacity: 0 !important;
+              pointer-events: none !important;
+            }
+            .admin-shell-main {
+              padding: 0 !important;
+            }
+            .admin-shell-header-menu {
+              display: none !important;
+            }
+            @media (min-width: 1024px) {
+              .admin-shell-header {
+                padding-left: calc(2rem + 1.5rem) !important;
+              }
+            }
           `,
         }}
       />
-      <aside className="w-full space-y-4 lg:w-72">
-        <div className="sticky top-6 space-y-4">
-          <Card className="border-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl shadow-slate-900/50">
-            <Link href="/dashboard" className="inline-flex w-full items-center justify-start text-sm font-semibold text-white/80 transition hover:text-white">
-              ← Volver al dashboard
-            </Link>
-            <p className="text-xs uppercase tracking-wide text-slate-300">Edificio</p>
-            <h1 className="text-xl font-semibold text-white underline decoration-white/60 underline-offset-4">
-              {building.name}
-            </h1>
-            <p className="text-sm text-slate-300">{building.address}</p>
-            <div className="mt-3 space-y-1 text-sm text-slate-200/90">
-              <p>
-                Unidades:{" "}
-                <span className="font-semibold text-white">{unitsCount}</span>
-              </p>
-              <p>
-                Deuda estimada:{" "}
-                <span className="font-semibold text-white">
-                  {formatCurrency(deudaTotal)}
-                </span>
-              </p>
-              <p className="text-xs text-slate-300">
-                Última liquidación:{" "}
-                {lastSettlement
-                  ? `${lastSettlement.month}/${lastSettlement.year}`
-                  : "No hay liquidaciones"}
-              </p>
-              <div className="mt-3">
-                <Link href={`/buildings/${buildingId}/settlements`}>
-                  <Button variant="secondary" className="w-full !border-white/30 !bg-white/10 !text-black hover:!bg-white/20">
-                    Nueva liquidación
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </Card>
-          <Card className="border-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700/90 ">
-            <BuildingNav buildingId={building.id} orientation="vertical" />
-          </Card>
-        </div>
-      </aside>
-      <section className="flex-1 space-y-4">{children}</section>
+      <BuildingSidebar
+        building={buildingInfo}
+        unitsCount={unitsCount}
+        totalDebt={deudaTotal}
+        lastSettlement={safeLastSettlement}
+      />
+      <section className="flex-1 space-y-4 px-4 py-6 sm:px-6 lg:pl-14">{children}</section>
     </div>
   );
 }

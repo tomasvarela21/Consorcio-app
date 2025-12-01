@@ -16,7 +16,7 @@ export function AdminShell({ children, userEmail }: AdminShellProps) {
   const closeSidebar = () => setSidebarOpen(false);
 
   return (
-    <div className="relative flex min-h-screen w-full bg-slate-100/80 lg:h-screen lg:overflow-hidden">
+    <div className="admin-shell relative flex min-h-screen w-full bg-slate-100/80 lg:h-screen lg:overflow-hidden">
       <div
         className={clsx(
           "admin-shell-sidebar fixed inset-y-0 left-0 z-40 w-64 transition-transform duration-300 lg:static lg:flex-shrink-0 lg:h-full lg:translate-x-0 lg:shadow-none",
@@ -41,8 +41,11 @@ export function AdminShell({ children, userEmail }: AdminShellProps) {
           userEmail={userEmail}
           showMenuButton
           onMenuClick={() => setSidebarOpen((prev) => !prev)}
+          className="admin-shell-header"
         />
-        <main className="flex-1 w-full bg-slate-100/80 px-4 py-6 sm:p-6 lg:overflow-y-auto">{children}</main>
+        <main className="admin-shell-main flex-1 w-full bg-slate-100/80 px-4 py-6 sm:p-6 lg:overflow-y-auto">
+          {children}
+        </main>
       </div>
     </div>
   );

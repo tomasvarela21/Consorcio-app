@@ -26,6 +26,7 @@ export default async function BuildingOverview({
     recentPayments,
     debtPending,
     debtorsCount,
+    overdueCharges,
     currentSettlement,
     currentCharges,
     paymentsThisMonth,
@@ -65,6 +66,17 @@ export default async function BuildingOverview({
         totalToPay: { gt: 0 },
       },
     }),
+    prisma.settlementCharge.findMany({
+      where: {
+        settlement: {
+          buildingId,
+          dueDate2: { lt: today },
+          NOT: { dueDate2: null },
+        },
+        totalToPay: { gt: 0 },
+      },
+      include: { settlement: true },
+    }),
     prisma.settlement.findFirst({
       where: { buildingId, month: currentMonth, year: currentYear },
       include: { charges: true },
@@ -93,12 +105,7 @@ export default async function BuildingOverview({
     0,
   );
 
-  const morososVencidos = currentCharges.filter(
-    (c) =>
-      Number(c.totalToPay) > 0 &&
-      c.settlement.dueDate2 &&
-      c.settlement.dueDate2 < today,
-  );
+  const morososVencidos = overdueCharges;
 
   const porVencer = currentCharges.filter((c) => {
     if (!c.settlement.dueDate2) return false;
