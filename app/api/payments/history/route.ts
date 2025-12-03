@@ -58,6 +58,8 @@ export async function GET(req: Request) {
         receiptNumber: p.receiptNumber,
         paymentDate: p.paymentDate.toISOString(),
         createdAt: p.createdAt.toISOString(),
+        status: p.status,
+        canceledAt: p.canceledAt ? p.canceledAt.toISOString() : null,
         settlement: {
           id: p.settlementId,
           month: p.settlement.month,

@@ -43,7 +43,7 @@ export default async function BuildingOverview({
       take: 3,
     }),
     prisma.payment.findMany({
-      where: { settlement: { buildingId } },
+      where: { settlement: { buildingId }, status: "COMPLETED" },
       include: { unit: true },
       orderBy: { paymentDate: "desc" },
       take: 5,
@@ -90,6 +90,7 @@ export default async function BuildingOverview({
     prisma.payment.findMany({
       where: {
         settlement: { buildingId, month: currentMonth, year: currentYear },
+        status: "COMPLETED",
       },
     }),
   ]);

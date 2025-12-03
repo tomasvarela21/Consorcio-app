@@ -51,6 +51,8 @@ type AccountHistory = {
       receiptNumber: string;
       paymentDate: string;
       notes?: string | null;
+      status: "COMPLETED" | "CANCELLED";
+      canceledAt: string | null;
     }>;
   }>;
 } | null;
@@ -324,7 +326,7 @@ export default function SettlementsPage() {
       )}
 
       {settlement && (
-        <Table>
+        <Table viewportClassName="max-h-[65vh] overflow-y-auto">
           <THead>
             <tr>
               <Th>Unidad</Th>
@@ -531,9 +533,14 @@ export default function SettlementsPage() {
                       Pagos:
                       <ul className="list-disc pl-5">
                         {p.payments.map((pay) => (
-                          <li key={pay.id}>
-                            {new Date(pay.paymentDate).toLocaleDateString("es-AR")} · {formatCurrency(pay.amount)} · Recibo{" "}
-                            {pay.receiptNumber}
+                          <li key={pay.id} className="flex flex-wrap items-center gap-2">
+                            <span>
+                              {new Date(pay.paymentDate).toLocaleDateString("es-AR")} · {formatCurrency(pay.amount)} · Recibo{" "}
+                              {pay.receiptNumber}
+                            </span>
+                            {pay.status === "CANCELLED" && (
+                              <Badge variant="danger">Anulado</Badge>
+                            )}
                           </li>
                         ))}
                       </ul>

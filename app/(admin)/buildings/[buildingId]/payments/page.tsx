@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Table, THead, Th, TBody, Tr, Td } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import { Modal } from "@/components/ui/modal";
 import { formatCurrency } from "@/lib/format";
@@ -16,6 +17,8 @@ type PaymentRow = {
   settlement: { month: number; year: number };
   unit: { id: number; code: string; building: string };
   responsible: string;
+  status: "COMPLETED" | "CANCELLED";
+  canceledAt: string | null;
 };
 
 export default function PaymentsPage() {
@@ -31,6 +34,9 @@ export default function PaymentsPage() {
   const [responsibleOptions, setResponsibleOptions] = useState<string[]>([]);
   const [selected, setSelected] = useState<PaymentRow | null>(null);
   const [openDetail, setOpenDetail] = useState(false);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<PaymentRow | null>(null);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
 
   const fetchPayments = async () => {
     setLoading(true);
@@ -64,6 +70,31 @@ export default function PaymentsPage() {
   const openDetailModal = (payment: PaymentRow) => {
     setSelected(payment);
     setOpenDetail(true);
+  };
+
+  const openCancelModal = (payment: PaymentRow) => {
+    setCancelTarget(payment);
+    setCancelModalOpen(true);
+  };
+
+  const cancelPayment = async () => {
+    if (!cancelTarget || cancelTarget.status === "CANCELLED") {
+      return;
+    }
+    setCancellingId(cancelTarget.id);
+    const res = await fetch(`/api/payments/${cancelTarget.id}`, {
+      method: "PATCH",
+    });
+    if (res.ok) {
+      toast.success("Pago anulado correctamente");
+      await fetchPayments();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      toast.error(body.message ?? "No se pudo anular el pago");
+    }
+    setCancellingId(null);
+    setCancelModalOpen(false);
+    setCancelTarget(null);
   };
 
   return (
@@ -143,7 +174,7 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      <Table>
+      <Table viewportClassName="max-h-[65vh] overflow-y-auto">
         <THead>
           <tr>
             <Th>Fecha de pago</Th>
@@ -151,6 +182,7 @@ export default function PaymentsPage() {
             <Th>Unidad</Th>
             <Th>Recibo</Th>
             <Th>Período</Th>
+            <Th>Estado</Th>
             <Th className="text-right">Monto</Th>
             <Th>Acciones</Th>
           </tr>
@@ -158,12 +190,12 @@ export default function PaymentsPage() {
         <TBody>
           {loading && (
             <Tr>
-              <Td colSpan={7}>Cargando pagos...</Td>
+              <Td colSpan={8}>Cargando pagos...</Td>
             </Tr>
           )}
           {!loading && rows.length === 0 && (
             <Tr>
-              <Td colSpan={7} className="text-slate-500">
+              <Td colSpan={8} className="text-slate-500">
                 Todavía no se registraron pagos para este edificio.
               </Td>
             </Tr>
@@ -177,11 +209,32 @@ export default function PaymentsPage() {
               <Td>
                 {p.settlement.month}/{p.settlement.year}
               </Td>
+              <Td>
+                <Badge variant={p.status === "CANCELLED" ? "danger" : "success"}>
+                  {p.status === "CANCELLED" ? "Anulado" : "Confirmado"}
+                </Badge>
+                {p.status === "CANCELLED" && p.canceledAt && (
+                  <p className="text-[11px] text-slate-500">
+                    {new Date(p.canceledAt).toLocaleDateString("es-AR")}
+                  </p>
+                )}
+              </Td>
               <Td className="text-right font-semibold">{formatCurrency(p.amount)}</Td>
               <Td>
-                <Button variant="ghost" onClick={() => openDetailModal(p)}>
-                  Ver detalle
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="ghost" onClick={() => openDetailModal(p)}>
+                    Ver detalle
+                  </Button>
+                  {p.status === "COMPLETED" && (
+                    <Button
+                      variant="danger"
+                      loading={cancellingId === p.id}
+                      onClick={() => openCancelModal(p)}
+                    >
+                      Anular pago
+                    </Button>
+                  )}
+                </div>
               </Td>
             </Tr>
           ))}
@@ -194,10 +247,12 @@ export default function PaymentsPage() {
         title="Detalle de pago"
         footer={
           <div className="flex justify-end gap-2">
-            {selected && (
+            {selected?.status === "COMPLETED" && (
               <Button
                 variant="secondary"
-                onClick={() => window.open(`/api/pdf/receipt/${selected.id}`, "_blank")}
+                onClick={() =>
+                  window.open(`/api/pdf/receipt/${selected.id}`, "_blank")
+                }
               >
                 Descargar recibo
               </Button>
@@ -229,9 +284,74 @@ export default function PaymentsPage() {
             <p>
               <span className="font-semibold">Monto:</span> {formatCurrency(selected.amount)}
             </p>
+            <p className="flex items-center gap-2">
+              <span className="font-semibold">Estado:</span>
+              <Badge variant={selected.status === "CANCELLED" ? "danger" : "success"}>
+                {selected.status === "CANCELLED" ? "Anulado" : "Confirmado"}
+              </Badge>
+            </p>
+            {selected.status === "CANCELLED" && selected.canceledAt && (
+              <p className="text-xs text-slate-500">
+                Anulado el {new Date(selected.canceledAt).toLocaleDateString("es-AR")}
+              </p>
+            )}
           </div>
         ) : (
           <p className="text-sm text-slate-500">Selecciona un pago para ver el detalle.</p>
+        )}
+      </Modal>
+
+      <Modal
+        open={cancelModalOpen}
+        onClose={() => {
+          setCancelModalOpen(false);
+          setCancelTarget(null);
+        }}
+        title="Anular pago"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setCancelModalOpen(false);
+                setCancelTarget(null);
+              }}
+            >
+              Mantener pago
+            </Button>
+            <Button
+              variant="danger"
+              loading={cancellingId === cancelTarget?.id}
+              onClick={cancelPayment}
+            >
+              Confirmar anulación
+            </Button>
+          </div>
+        }
+      >
+        {cancelTarget ? (
+          <div className="space-y-2 text-sm text-slate-700">
+            <p>
+              Estás por anular el pago{" "}
+              <span className="font-semibold">{cancelTarget.receiptNumber}</span>.
+            </p>
+            <p>
+              Unidad: <span className="font-semibold">{cancelTarget.unit.code}</span>
+            </p>
+            <p>
+              Responsable:{" "}
+              <span className="font-semibold">{cancelTarget.responsible}</span>
+            </p>
+            <p>
+              Monto: <span className="font-semibold">{formatCurrency(cancelTarget.amount)}</span>
+            </p>
+            <p className="text-xs text-slate-500">
+              El importe volverá a las liquidaciones correspondientes y quedará
+              registro de que el pago fue anulado.
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500">Selecciona un pago para anular.</p>
         )}
       </Modal>
     </div>

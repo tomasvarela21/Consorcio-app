@@ -5,11 +5,16 @@ import type {
   ThHTMLAttributes,
 } from "react";
 
+type CustomTableProps = TableHTMLAttributes<HTMLTableElement> & {
+  viewportClassName?: string;
+};
+
 export function Table({
   children,
   className,
+  viewportClassName,
   ...props
-}: TableHTMLAttributes<HTMLTableElement>) {
+}: CustomTableProps) {
   return (
     <div
       className={clsx(
@@ -17,7 +22,7 @@ export function Table({
         className,
       )}
     >
-      <div className="w-full overflow-x-auto">
+      <div className={clsx("w-full overflow-x-auto", viewportClassName)}>
         <table className="min-w-full divide-y divide-slate-200 text-sm" {...props}>
           {children}
         </table>

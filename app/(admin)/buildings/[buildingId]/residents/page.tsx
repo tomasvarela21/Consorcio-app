@@ -246,7 +246,7 @@ export default function ResidentsPage() {
         />
       </div>
 
-      <Table>
+      <Table viewportClassName="max-h-[65vh] overflow-y-auto">
         <THead>
           <tr>
             <Th>Unidad</Th>

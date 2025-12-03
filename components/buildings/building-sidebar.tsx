@@ -37,7 +37,7 @@ export function BuildingSidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const panelClasses =
-    "building-sidebar flex h-full w-full flex-col gap-6 border border-white/5 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 px-6 py-7 text-slate-100 shadow-2xl shadow-black/40";
+    "building-sidebar flex h-full w-full flex-col gap-6 overflow-y-auto border border-white/5 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 px-6 py-7 text-slate-100 shadow-2xl shadow-black/40";
 
   const content = (
     <>
@@ -57,7 +57,7 @@ export function BuildingSidebar({
           <p className="text-sm text-slate-300">{building.address}</p>
         </div>
       </div>
-      <div className="space-y-1 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200 shadow-inner shadow-black/30">
+      <div className="space-y-2 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200 shadow-inner shadow-black/30">
         <p>
           Unidades: <span className="font-semibold text-white">{unitsCount}</span>
         </p>
@@ -81,16 +81,18 @@ export function BuildingSidebar({
           </Link>
         </div>
       </div>
-      <div className="space-y-2">
+      <div className="flex flex-1 flex-col space-y-2">
         <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-slate-400/80">
           Navegación
         </p>
-        <BuildingNav
-          buildingId={building.id}
-          orientation="vertical"
-          variant="sidebar"
-          onNavigate={() => setMobileOpen(false)}
-        />
+        <div className="flex-1 overflow-y-auto">
+          <BuildingNav
+            buildingId={building.id}
+            orientation="vertical"
+            variant="sidebar"
+            onNavigate={() => setMobileOpen(false)}
+          />
+        </div>
       </div>
     </>
   );

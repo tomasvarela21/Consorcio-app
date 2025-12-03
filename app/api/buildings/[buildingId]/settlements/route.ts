@@ -204,7 +204,7 @@ export async function DELETE(
   if (!settlement) {
     return NextResponse.json({ message: "Liquidación no encontrada" }, { status: 404 });
   }
-  if (settlement.payments.length > 0) {
+  if (settlement.payments.some((p) => p.status === "COMPLETED")) {
     return NextResponse.json(
       { message: "No se puede eliminar una liquidación con pagos registrados" },
       { status: 400 },
@@ -212,6 +212,9 @@ export async function DELETE(
   }
 
   await prisma.$transaction([
+    prisma.payment.deleteMany({
+      where: { settlementId: settlement.id },
+    }),
     prisma.settlementCharge.deleteMany({ where: { settlementId: settlement.id } }),
     prisma.settlement.delete({ where: { id: settlement.id } }),
   ]);

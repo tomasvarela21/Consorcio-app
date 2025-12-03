@@ -41,6 +41,12 @@ export async function GET(
       { status: 404 },
     );
   }
+  if (payment.status === "CANCELLED") {
+    return NextResponse.json(
+      { message: "El pago fue anulado y no tiene recibo vigente" },
+      { status: 400 },
+    );
+  }
 
   const responsable =
     payment.unit.contacts.find((c) => c.role === "RESPONSABLE")?.fullName ??

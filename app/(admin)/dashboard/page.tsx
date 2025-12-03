@@ -29,6 +29,7 @@ export default async function DashboardPage() {
         include: { settlement: true },
       }),
       prisma.payment.findMany({
+        where: { status: "COMPLETED" },
         include: { unit: true, settlement: true },
         orderBy: { paymentDate: "desc" },
         take: 5,

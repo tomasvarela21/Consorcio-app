@@ -59,15 +59,17 @@ export async function GET(
     partialPaymentsTotal: Number(c.partialPaymentsTotal),
     totalToPay: Number(c.totalToPay),
     status: c.status,
-    payments: payments
-      .filter((p) => p.settlementId === c.settlementId)
-      .map((p) => ({
-        id: p.id,
-        amount: Number(p.amount),
-        receiptNumber: p.receiptNumber,
-        paymentDate: p.paymentDate.toISOString(),
-        notes: p.notes,
-      })),
+        payments: payments
+          .filter((p) => p.settlementId === c.settlementId)
+          .map((p) => ({
+            id: p.id,
+            amount: Number(p.amount),
+            receiptNumber: p.receiptNumber,
+            paymentDate: p.paymentDate.toISOString(),
+            notes: p.notes,
+            status: p.status,
+            canceledAt: p.canceledAt ? p.canceledAt.toISOString() : null,
+          })),
   }));
 
   return NextResponse.json({

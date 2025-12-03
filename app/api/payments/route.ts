@@ -49,6 +49,7 @@ export async function POST(req: Request) {
         receiptNumber,
         paymentDate: paymentDateValue,
         notes,
+        status: "COMPLETED",
       },
     });
 
@@ -70,6 +71,9 @@ export async function POST(req: Request) {
       amount: Number(result.payment.amount),
       paymentDate: result.payment.paymentDate.toISOString(),
       createdAt: result.payment.createdAt.toISOString(),
+      canceledAt: result.payment.canceledAt
+        ? result.payment.canceledAt.toISOString()
+        : null,
     },
     charge: {
       ...result.updatedCharge,
