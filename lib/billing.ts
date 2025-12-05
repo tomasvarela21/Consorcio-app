@@ -4,6 +4,8 @@ type LateFeeResult = {
   totalWithLate: number;
 };
 
+export const EARLY_PAYMENT_DISCOUNT_RATE = 0.1;
+
 export function calculateLateFee(
   originalAmount: number,
   dueDate2: Date,
@@ -28,6 +30,88 @@ export function calculateLateFee(
   const lateAmount = roundTwo(originalAmount * rate * monthsLate);
   const totalWithLate = roundTwo(originalAmount + lateAmount);
   return { monthsLate, lateAmount, totalWithLate };
+}
+
+export function getEarlyPaymentDiscountCap(amount: number) {
+  return roundTwo(Math.max(0, amount) * EARLY_PAYMENT_DISCOUNT_RATE);
+}
+
+export function getChargePortions({
+  previousBalance,
+  currentFee,
+  partialPaymentsTotal,
+  discountApplied = 0,
+}: {
+  previousBalance: number;
+  currentFee: number;
+  partialPaymentsTotal: number;
+  discountApplied?: number;
+}) {
+  const prev = Math.max(0, Number(previousBalance ?? 0));
+  const current = Math.max(0, Number(currentFee ?? 0));
+  const paid = Math.max(0, Number(partialPaymentsTotal ?? 0));
+  const discount = Math.max(0, Number(discountApplied ?? 0));
+
+  const previousOutstanding = Math.max(0, roundTwo(prev - paid));
+  const currentPaid = Math.max(0, roundTwo(paid - prev));
+  const currentOutstandingNominal = Math.max(
+    0,
+    roundTwo(current - currentPaid - discount),
+  );
+
+  return { previousOutstanding, currentPaid, currentOutstandingNominal };
+}
+
+export function getDiscountStats(currentFee: number, discountUsed: number) {
+  const cap = getEarlyPaymentDiscountCap(currentFee);
+  const used = Math.min(cap, Math.max(0, roundTwo(discountUsed ?? 0)));
+  const remaining = Math.max(0, roundTwo(cap - used));
+  return { cap, used, remaining };
+}
+
+export function calculateEarlyPaymentDiscount({
+  amountForCurrent,
+  paymentDate,
+  firstDueDate,
+  currentOutstandingNominal,
+  discountRemaining,
+}: {
+  amountForCurrent: number;
+  paymentDate: Date;
+  firstDueDate: Date | null;
+  currentOutstandingNominal: number;
+  discountRemaining: number;
+}) {
+  if (
+    !firstDueDate ||
+    paymentDate > firstDueDate ||
+    amountForCurrent <= 0 ||
+    currentOutstandingNominal <= 0 ||
+    discountRemaining <= 0
+  ) {
+    return 0;
+  }
+
+  if (amountForCurrent >= currentOutstandingNominal - 0.005) {
+    return 0;
+  }
+
+  const nominalCapByPayment =
+    amountForCurrent / (1 - EARLY_PAYMENT_DISCOUNT_RATE);
+  const nominalCapByDiscount =
+    discountRemaining / EARLY_PAYMENT_DISCOUNT_RATE;
+  const usableNominal = Math.min(
+    currentOutstandingNominal,
+    nominalCapByPayment,
+    nominalCapByDiscount,
+  );
+
+  if (usableNominal <= 0) {
+    return 0;
+  }
+
+  const discount = roundTwo(usableNominal * EARLY_PAYMENT_DISCOUNT_RATE);
+  return Math.min(discount, discountRemaining);
 }
 
 export function roundTwo(value: number) {

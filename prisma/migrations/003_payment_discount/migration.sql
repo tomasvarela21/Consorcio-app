@@ -1,0 +1,2 @@
+ALTER TABLE "payments"
+ADD COLUMN "discountApplied" DECIMAL(12,2) NOT NULL DEFAULT 0;

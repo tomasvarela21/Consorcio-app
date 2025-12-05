@@ -43,6 +43,18 @@ export async function GET(
       0,
       Number(settlement.totalExpense) * (1 - coverage / 100),
     );
+    const discountGroups = await prisma.payment.groupBy({
+      by: ["unitId"],
+      where: { settlementId: settlement.id, status: "COMPLETED" },
+      _sum: { discountApplied: true },
+    });
+    const discountMap = new Map<number, number>(
+      discountGroups.map((group) => [
+        group.unitId,
+        Number(group._sum.discountApplied ?? 0),
+      ]),
+    );
+
     const charges = settlement.charges.map((c) => {
       const responsable = c.unit.contacts.find((ct) => ct.role === "RESPONSABLE");
       return {
@@ -55,6 +67,7 @@ export async function GET(
         partialPaymentsTotal: Number(c.partialPaymentsTotal),
         totalToPay: Number(c.totalToPay),
         status: c.status,
+        discountApplied: discountMap.get(c.unitId) ?? 0,
       };
     });
     return NextResponse.json({

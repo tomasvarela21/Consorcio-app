@@ -9,6 +9,12 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
+import {
+  EARLY_PAYMENT_DISCOUNT_RATE,
+  getChargePortions,
+  getDiscountStats,
+  roundTwo,
+} from "@/lib/billing";
 
 type ChargeRow = {
   id: number;
@@ -20,6 +26,7 @@ type ChargeRow = {
   partialPaymentsTotal: number;
   totalToPay: number;
   status: string;
+  discountApplied: number;
 };
 
 type SettlementSummary = {
@@ -92,16 +99,49 @@ export default function SettlementsPage() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountData, setAccountData] = useState<AccountHistory>(null);
 
-  const currentPeriodPartial = (charge: Partial<ChargeRow>) => {
-    const partials = Number(charge.partialPaymentsTotal ?? 0);
-    const previous = Number(charge.previousBalance ?? 0);
-    const diff = partials - previous;
-    return diff > 0 ? diff : 0;
-  };
+  const discountLabel = `${Math.round(EARLY_PAYMENT_DISCOUNT_RATE * 100)}%`;
 
-  const currentPeriodDue = (charge: Partial<ChargeRow>) => {
-    const partials = currentPeriodPartial(charge);
-    return Math.max(0, Number(charge.currentFee ?? 0) - partials);
+  const getChargeState = (charge: Partial<ChargeRow>) =>
+    getChargePortions({
+      previousBalance: Number(charge.previousBalance ?? 0),
+      currentFee: Number(charge.currentFee ?? 0),
+      partialPaymentsTotal: Number(charge.partialPaymentsTotal ?? 0),
+      discountApplied: Number(charge.discountApplied ?? 0),
+    });
+
+  const computeDueForDate = (charge: ChargeRow, reference: Date) => {
+    const state = getChargeState(charge);
+    const currentFee = Number(charge.currentFee ?? 0);
+    const discountStats = getDiscountStats(
+      currentFee,
+      Number(charge.discountApplied ?? 0),
+    );
+    const firstDue = settlement?.dueDate1 ? new Date(settlement.dueDate1) : null;
+    const isValidReference = !Number.isNaN(reference.getTime());
+    const discountWindowActive =
+      !!firstDue && isValidReference && reference <= firstDue;
+    let discountPreview = 0;
+    if (
+      discountWindowActive &&
+      state.currentOutstandingNominal > 0 &&
+      discountStats.remaining > 0
+    ) {
+      const theoretical = roundTwo(
+        state.currentOutstandingNominal * EARLY_PAYMENT_DISCOUNT_RATE,
+      );
+      discountPreview = Math.min(theoretical, discountStats.remaining);
+    }
+    const currentDue = Math.max(
+      0,
+      roundTwo(state.currentOutstandingNominal - discountPreview),
+    );
+    const totalDue = roundTwo(state.previousOutstanding + currentDue);
+    return {
+      totalDue,
+      discountPreview,
+      discountActive: discountPreview > 0,
+      currentPaid: state.currentPaid,
+    };
   };
 
   const moneyOrDash = (value: number) =>
@@ -172,7 +212,8 @@ export default function SettlementsPage() {
 
   const openPayModal = (charge: ChargeRow) => {
     setSelectedCharge(charge);
-    setPayAmount(currentPeriodDue(charge).toString());
+    const recommendation = computeDueForDate(charge, today);
+    setPayAmount(recommendation.totalDue.toFixed(2));
     setReceiptNumber("");
     setPaymentDate(today.toISOString().slice(0, 10));
     setOpenPayment(true);
@@ -201,6 +242,18 @@ export default function SettlementsPage() {
       toast.error(body.message ?? "Error al registrar pago");
     }
   };
+
+  const paymentPreview = useMemo(() => {
+    if (!selectedCharge || !settlement || !paymentDate) return null;
+    const reference = new Date(paymentDate);
+    if (Number.isNaN(reference.getTime())) return null;
+    return computeDueForDate(selectedCharge, reference);
+  }, [selectedCharge, settlement, paymentDate]);
+
+  useEffect(() => {
+    if (!openPayment || !paymentPreview) return;
+    setPayAmount(paymentPreview.totalDue.toFixed(2));
+  }, [openPayment, paymentPreview]);
 
   const handleAccountHistory = async (unitId: number) => {
     const res = await fetch(`/api/units/${unitId}/account-history`);
@@ -344,27 +397,42 @@ export default function SettlementsPage() {
                 <Td colSpan={7}>Sin cargos en esta liquidación.</Td>
               </Tr>
             )}
-            {charges.map((c) => (
-              <Tr key={c.id}>
-                <Td className="font-semibold">{c.unitCode}</Td>
-                <Td>{c.responsable}</Td>
-                <Td className="text-right">{moneyOrDash(c.currentFee)}</Td>
-                <Td className="text-right">{moneyOrDash(currentPeriodPartial(c))}</Td>
-                <Td className="text-right font-semibold">{moneyOrDash(currentPeriodDue(c))}</Td>
-                <Td>
-                  <Badge variant={statusColor(c.status)}>
-                    {c.status === "PENDING" && "Pendiente"}
-                    {c.status === "PARTIAL" && "Parcial"}
-                    {c.status === "PAID" && "Pagado"}
-                  </Badge>
-                </Td>
-                <Td className="space-x-2">
-                  <Button variant="secondary" onClick={() => openPayModal(c)}>
-                    Realizar pago
-                  </Button>
-                </Td>
-              </Tr>
-            ))}
+            {charges.map((c) => {
+              const state = getChargeState(c);
+              const dueInfo = computeDueForDate(c, today);
+              return (
+                <Tr key={c.id}>
+                  <Td className="font-semibold">{c.unitCode}</Td>
+                  <Td>{c.responsable}</Td>
+                  <Td className="text-right">{moneyOrDash(c.currentFee)}</Td>
+                  <Td className="text-right">
+                    {moneyOrDash(state.currentPaid)}
+                  </Td>
+                  <Td className="text-right font-semibold">
+                    <div className="flex flex-col items-end">
+                      {moneyOrDash(dueInfo.totalDue)}
+                      {dueInfo.discountActive && (
+                        <span className="text-xs font-medium text-emerald-600">
+                          Incluye {discountLabel} de descuento por pago dentro del primer vencimiento
+                        </span>
+                      )}
+                    </div>
+                  </Td>
+                  <Td>
+                    <Badge variant={statusColor(c.status)}>
+                      {c.status === "PENDING" && "Pendiente"}
+                      {c.status === "PARTIAL" && "Parcial"}
+                      {c.status === "PAID" && "Pagado"}
+                    </Badge>
+                  </Td>
+                  <Td className="space-x-2">
+                    <Button variant="secondary" onClick={() => openPayModal(c)}>
+                      Realizar pago
+                    </Button>
+                  </Td>
+                </Tr>
+              );
+            })}
           </TBody>
         </Table>
       )}
@@ -491,6 +559,11 @@ export default function SettlementsPage() {
       >
         <form className="space-y-4" onSubmit={handlePayment}>
           <Input label="Monto a pagar" type="number" step="0.01" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} />
+          {paymentPreview?.discountActive && (
+            <p className="text-xs text-emerald-600">
+              Incluye {discountLabel} de descuento por pago dentro del primer vencimiento.
+            </p>
+          )}
           <Input label="Número de recibo" value={receiptNumber} onChange={(e) => setReceiptNumber(e.target.value)} required />
           <Input label="Fecha de pago" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
           <div className="flex justify-end gap-3 pt-2">

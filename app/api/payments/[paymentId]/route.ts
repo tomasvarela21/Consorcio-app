@@ -41,14 +41,31 @@ export async function PATCH(
 
   const amountNumber = Number(payment.amount);
   const existingPartial = Number(charge.partialPaymentsTotal ?? 0);
-  const newPartial = roundTwo(Math.max(0, existingPartial - amountNumber));
-  const baseDebt =
-    Number(charge.previousBalance) + Number(charge.currentFee);
-  const totalToPay = roundTwo(baseDebt - newPartial);
-  const status =
-    totalToPay <= 0 ? "PAID" : newPartial > 0 ? "PARTIAL" : "PENDING";
 
   const result = await prisma.$transaction(async (tx) => {
+    const discountAggregate = await tx.payment.aggregate({
+      where: {
+        settlementId: payment.settlementId,
+        unitId: payment.unitId,
+        status: "COMPLETED",
+      },
+      _sum: { discountApplied: true },
+    });
+    const discountSumBefore = Number(discountAggregate._sum.discountApplied ?? 0);
+    const discountAfter = roundTwo(
+      Math.max(
+        0,
+        discountSumBefore - Number(payment.discountApplied ?? 0),
+      ),
+    );
+    const newPartial = roundTwo(Math.max(0, existingPartial - amountNumber));
+    const baseDebt =
+      Number(charge.previousBalance ?? 0) + Number(charge.currentFee ?? 0);
+    const effectiveTotal = Math.max(0, roundTwo(baseDebt - discountAfter));
+    const totalToPay = Math.max(0, roundTwo(effectiveTotal - newPartial));
+    const status =
+      totalToPay <= 0 ? "PAID" : newPartial > 0 ? "PARTIAL" : "PENDING";
+
     const updatedPayment = await tx.payment.update({
       where: { id },
       data: {
