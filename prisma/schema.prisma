@@ -49,6 +49,7 @@ model Unit {
   code              String
   percentage        Decimal            @db.Decimal(10, 4)
   accountStatus     AccountStatus      @default(ON_TIME)
+  creditBalance     Decimal            @default(0) @db.Decimal(12, 2)
   createdAt         DateTime           @default(now())
   building          Building           @relation(fields: [buildingId], references: [id])
   contacts          Contact[]
@@ -100,6 +101,10 @@ model SettlementCharge {
   partialPaymentsTotal Decimal      @default(0) @db.Decimal(12, 2)
   totalToPay           Decimal      @db.Decimal(12, 2)
   status               ChargeStatus
+  lateFeeFrozenAt      DateTime?
+  lateFeeMonthsLate    Int?         @default(0)
+  lateFeeAmount        Decimal      @default(0) @db.Decimal(12, 2)
+  lateFeePaidTotal     Decimal      @default(0) @db.Decimal(12, 2)
   settlement           Settlement   @relation(fields: [settlementId], references: [id])
   unit                 Unit         @relation(fields: [unitId], references: [id])
 

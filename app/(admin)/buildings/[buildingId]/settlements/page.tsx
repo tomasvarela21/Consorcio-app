@@ -95,6 +95,27 @@ export default function SettlementsPage() {
   const [payAmount, setPayAmount] = useState("");
   const [receiptNumber, setReceiptNumber] = useState("");
   const [paymentDate, setPaymentDate] = useState(today.toISOString().slice(0, 10));
+  const [paymentFeedback, setPaymentFeedback] = useState<
+    | {
+        appliedToCurrent: number;
+        excedente: number;
+        appliedToMorosos: number;
+        appliedToUpcomingSettlements: number;
+        upcomingSettlementAllocations: Array<{
+          chargeId: number;
+          settlementId: number;
+          month: number;
+          year: number;
+          appliedAmount: number;
+          totalToPayBefore: number;
+          totalToPayAfter: number;
+        }>;
+        morosoPrevio: number;
+        morosoFinal: number;
+        creditBalance: number;
+      }
+    | null
+  >(null);
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountData, setAccountData] = useState<AccountHistory>(null);
@@ -150,6 +171,54 @@ export default function SettlementsPage() {
     ) : (
       <span>{formatCurrency(value)}</span>
     );
+
+  const renderPaymentFeedback = () => {
+    if (!paymentFeedback) return null;
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+        <h4 className="mb-2 font-semibold text-slate-900">Resumen del pago</h4>
+        <div className="grid gap-1 text-slate-700 md:grid-cols-2">
+          <span>
+            Aplicado a liquidación: {formatCurrency(paymentFeedback.appliedToCurrent)}
+          </span>
+          <span>Excedente generado: {formatCurrency(paymentFeedback.excedente)}</span>
+          <span>
+            Aplicado a morosos: {formatCurrency(paymentFeedback.appliedToMorosos)}
+          </span>
+          <span>
+            Aplicado a futuras liquidaciones: {formatCurrency(
+              paymentFeedback.appliedToUpcomingSettlements,
+            )}
+          </span>
+          <span>Saldo moroso previo: {formatCurrency(paymentFeedback.morosoPrevio)}</span>
+          <span>Saldo moroso final: {formatCurrency(paymentFeedback.morosoFinal)}</span>
+          <span>Saldo a favor: {formatCurrency(paymentFeedback.creditBalance)}</span>
+        </div>
+        {paymentFeedback.upcomingSettlementAllocations.length > 0 && (
+          <div className="mt-2 text-xs text-slate-600">
+            <p className="font-semibold uppercase text-slate-500">
+              Adelantos aplicados
+            </p>
+            <div className="space-y-1">
+              {paymentFeedback.upcomingSettlementAllocations.map((alloc) => (
+                <div key={`settlement-${alloc.chargeId}`} className="rounded border border-dashed border-slate-200 p-2">
+                  <div className="flex justify-between">
+                    <span>
+                      {alloc.month}/{alloc.year}
+                    </span>
+                    <span>{formatCurrency(alloc.appliedAmount)}</span>
+                  </div>
+                  <p>
+                    Antes: {formatCurrency(alloc.totalToPayBefore)} · Después: {formatCurrency(alloc.totalToPayAfter)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -217,6 +286,7 @@ export default function SettlementsPage() {
     setReceiptNumber("");
     setPaymentDate(today.toISOString().slice(0, 10));
     setOpenPayment(true);
+    setPaymentFeedback(null);
   };
 
   const handlePayment = async (e: React.FormEvent) => {
@@ -233,12 +303,12 @@ export default function SettlementsPage() {
         paymentDate,
       }),
     });
+    const body = await res.json().catch(() => ({}));
     if (res.ok) {
+      setPaymentFeedback(body.summary ?? null);
       toast.success("Pago registrado");
-      setOpenPayment(false);
       loadData();
     } else {
-      const body = await res.json().catch(() => ({}));
       toast.error(body.message ?? "Error al registrar pago");
     }
   };
@@ -570,8 +640,9 @@ export default function SettlementsPage() {
             <Button variant="secondary" type="button" onClick={() => setOpenPayment(false)}>
               Cancelar
             </Button>
-            <Button type="submit">Confirmar</Button>
+            <Button type="submit">Confirmar pago</Button>
           </div>
+          {renderPaymentFeedback()}
         </form>
       </Modal>
 

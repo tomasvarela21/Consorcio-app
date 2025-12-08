@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth";
-import { calculateLateFee } from "@/lib/billing";
+import { getUnitMorosoSummary } from "@/lib/morosos";
 
 export async function GET(
   _req: Request,
@@ -18,84 +18,71 @@ export async function GET(
   }
   const today = new Date();
 
-  const charges = await prisma.settlementCharge.findMany({
+  const candidateUnits = await prisma.settlementCharge.findMany({
     where: {
-      totalToPay: { gt: 0 },
       settlement: {
-        buildingId: buildingId,
-        dueDate2: { lt: today },
-        NOT: { dueDate2: null },
+        buildingId,
+        dueDate2: { not: null, lt: today },
       },
+      OR: [
+        { totalToPay: { gt: 0 } },
+        {
+          AND: [
+            { lateFeeAmount: { gt: 0 } },
+            { status: { not: "PAID" } },
+          ],
+        },
+      ],
     },
-    include: {
-      settlement: true,
-      unit: { include: { contacts: true } },
-    },
+    distinct: ["unitId"],
+    select: { unitId: true },
   });
 
-  const grouped: Record<
-    number,
-    {
-      unitId: number;
-      unitCode: string;
-      responsable: string;
-      periods: Array<{
-        settlementId: number;
-        month: number;
-        year: number;
-        originalDebt: number;
-        monthsLate: number;
-        lateAmount: number;
-        latePercentage: number;
-        frozenTotal: number;
-        payments: number;
-        pendingAmount: number;
-      }>;
-    }
-  > = {};
+  const unitIds = candidateUnits.map((c) => c.unitId);
+  if (!unitIds.length) {
+    return NextResponse.json([]);
+  }
 
-  charges.forEach((charge) => {
-    if (!charge.settlement.dueDate2) return;
-    const baseDebt = Number(charge.previousBalance) + Number(charge.currentFee);
-    const rate = Number(charge.settlement.lateFeePercentage ?? 10);
-    const { monthsLate, lateAmount, totalWithLate } = calculateLateFee(
-      baseDebt,
-      charge.settlement.dueDate2,
-      today,
-      rate,
-    );
-    const payments = Number(charge.partialPaymentsTotal ?? 0);
-    const pendingAmount = Math.max(0, totalWithLate - payments);
-    const key = charge.unitId;
-    const responsable =
-      charge.unit.contacts.find((c) => c.role === "RESPONSABLE")?.fullName ??
-      "Sin responsable";
-    if (!grouped[key]) {
-      grouped[key] = {
-        unitId: charge.unitId,
-        unitCode: charge.unit.code,
+  const units = await prisma.unit.findMany({
+    where: { id: { in: unitIds } },
+    include: { contacts: true },
+  });
+
+  const unitMap = new Map(units.map((u) => [u.id, u]));
+
+  const summaries = await Promise.all(
+    unitIds.map((unitId) => getUnitMorosoSummary(unitId, today)),
+  );
+
+  const result = summaries
+    .filter((summary) => summary.totalMoroso > 0)
+    .map((summary) => {
+      const unit = unitMap.get(summary.unitId);
+      const responsable =
+        unit?.contacts.find((c) => c.role === "RESPONSABLE")?.fullName ??
+        "Sin responsable";
+      return {
+        unitId: summary.unitId,
+        unitCode: unit?.code ?? "",
         responsable,
-        periods: [],
+        creditBalance: Number(unit?.creditBalance ?? 0),
+        totalDebt: summary.totalMoroso,
+        periods: summary.bySettlement.map((period) => ({
+          settlementId: period.settlementId,
+          month: period.month,
+          year: period.year,
+          originalDebt: period.originalDebt,
+          deudaPendiente: period.deudaOriginalLiquidacionPendiente,
+          partialPayments: period.partialPrincipalPaid,
+          monthsLate: period.monthsLate,
+          latePercentage: period.lateFeePercentage,
+          lateAmount: period.lateAmountTotal,
+          lateAmountPending: period.lateAmountPending,
+          pendingAmount: period.totalMorosoLiquidacionPendiente,
+        })),
       };
-    }
-    grouped[key].periods.push({
-        settlementId: charge.settlementId,
-        month: charge.settlement.month,
-        year: charge.settlement.year,
-        originalDebt: baseDebt,
-        monthsLate,
-        lateAmount,
-        latePercentage: rate,
-        frozenTotal: totalWithLate,
-        payments,
-        pendingAmount,
-    });
-  });
-
-  const result = Object.values(grouped).map((item) => ({
-    ...item,
-    totalDebt: item.periods.reduce((acc, p) => acc + p.pendingAmount, 0),
-  }));
+    })
+    .sort((a, b) => a.unitCode.localeCompare(b.unitCode));
 
   return NextResponse.json(result);
 }

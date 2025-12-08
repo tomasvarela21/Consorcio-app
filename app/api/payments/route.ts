@@ -7,6 +7,11 @@ import {
   getDiscountStats,
   roundTwo,
 } from "@/lib/billing";
+import {
+  applyCreditToUpcomingSettlements,
+  applyFundsToMorosos,
+  getUnitMorosoSummary,
+} from "@/lib/morosos";
 
 export async function POST(req: Request) {
   const session = await getAdminSession();
@@ -46,6 +51,16 @@ export async function POST(req: Request) {
   }
   const paymentDateValue = paymentDate ? new Date(paymentDate) : new Date();
   const paymentResult = await prisma.$transaction(async (tx) => {
+    const unitRecord = await tx.unit.findUnique({ where: { id: unitId } });
+    if (!unitRecord) {
+      throw new Error("Unidad inexistente");
+    }
+    const creditBalanceBefore = Number(unitRecord.creditBalance ?? 0);
+    const morosoBefore = await getUnitMorosoSummary(
+      unitId,
+      paymentDateValue,
+      tx,
+    );
     const discountAggregate = await tx.payment.aggregate({
       where: { settlementId, unitId, status: "COMPLETED" },
       _sum: { discountApplied: true },
@@ -102,8 +117,63 @@ export async function POST(req: Request) {
         status,
       },
     });
+    const effectiveTotalBefore = Math.max(
+      0,
+      roundTwo(baseDebt - discountUsed),
+    );
+    const deudaAntes = Math.max(
+      0,
+      roundTwo(effectiveTotalBefore - totalPaidBefore),
+    );
+    const pagoEfectivoLiquidacion = roundTwo(deudaAntes - totalToPay);
+    const excedentePagoActual = Math.max(
+      0,
+      roundTwo(amountNumber - pagoEfectivoLiquidacion),
+    );
 
-    return { payment, updatedCharge };
+    let creditPool = roundTwo(creditBalanceBefore + excedentePagoActual);
+    let morosoApplication = null;
+    let upcomingApplication = null;
+    if (creditPool > 0) {
+      morosoApplication = await applyFundsToMorosos({
+        client: tx,
+        unitId,
+        referenceDate: paymentDateValue,
+        amountFromPayment: 0,
+        amountFromCredit: creditPool,
+      });
+      creditPool = morosoApplication.remainingCredit;
+    }
+    if (creditPool > 0) {
+      upcomingApplication = await applyCreditToUpcomingSettlements({
+        client: tx,
+        unitId,
+        referenceDate: paymentDateValue,
+        availableCredit: creditPool,
+      });
+      creditPool = upcomingApplication.remainingCredit;
+    }
+    await tx.unit.update({
+      where: { id: unitId },
+      data: { creditBalance: creditPool },
+    });
+    const morosoAfter = await getUnitMorosoSummary(
+      unitId,
+      paymentDateValue,
+      tx,
+    );
+
+    return {
+      payment,
+      updatedCharge,
+      pagoEfectivoLiquidacion,
+      excedentePagoActual,
+      morosoBefore,
+      morosoAfter,
+      morosoApplication,
+      upcomingApplication,
+      creditBalance: creditPool,
+    };
   });
 
   return NextResponse.json({
@@ -122,6 +192,18 @@ export async function POST(req: Request) {
       currentFee: Number(paymentResult.updatedCharge.currentFee),
       partialPaymentsTotal: Number(paymentResult.updatedCharge.partialPaymentsTotal),
       totalToPay: Number(paymentResult.updatedCharge.totalToPay),
+    },
+    summary: {
+      appliedToCurrent: paymentResult.pagoEfectivoLiquidacion,
+      excedente: paymentResult.excedentePagoActual,
+      appliedToMorosos: paymentResult.morosoApplication?.totalApplied ?? 0,
+      appliedToUpcomingSettlements:
+        paymentResult.upcomingApplication?.totalApplied ?? 0,
+      upcomingSettlementAllocations:
+        paymentResult.upcomingApplication?.allocations ?? [],
+      morosoPrevio: paymentResult.morosoBefore.totalMoroso,
+      morosoFinal: paymentResult.morosoAfter.totalMoroso,
+      creditBalance: paymentResult.creditBalance,
     },
   });
 }

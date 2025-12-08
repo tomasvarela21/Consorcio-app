@@ -9,22 +9,57 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { formatCurrency } from "@/lib/format";
 
+type MorosoPeriod = {
+  settlementId: number;
+  month: number;
+  year: number;
+  originalDebt: number;
+  deudaPendiente: number;
+  partialPayments: number;
+  monthsLate: number;
+  latePercentage: number;
+  lateAmount: number;
+  lateAmountPending: number;
+  pendingAmount: number;
+};
+
 type Debtor = {
   unitId: number;
   unitCode: string;
   responsable: string;
+  creditBalance: number;
   totalDebt: number;
-  periods: Array<{
+  periods: MorosoPeriod[];
+};
+
+type PaymentSummary = {
+  amount: number;
+  morosoPrevio: number;
+  morosoFinal: number;
+  appliedToMorosos: number;
+  appliedFromPayment: number;
+  appliedFromCredit: number;
+  creditBalance: number;
+  appliedToUpcomingSettlements: number;
+  upcomingSettlementAllocations: Array<{
+    chargeId: number;
     settlementId: number;
     month: number;
     year: number;
-    originalDebt: number;
-    monthsLate: number;
-    latePercentage: number;
-    lateAmount: number;
-    frozenTotal: number;
-    payments: number;
-    pendingAmount: number;
+    appliedAmount: number;
+    totalToPayBefore: number;
+    totalToPayAfter: number;
+  }>;
+  allocations: Array<{
+    settlementId: number;
+    chargeId: number;
+    month: number;
+    year: number;
+    appliedPrincipalFromPayment: number;
+    appliedPrincipalFromCredit: number;
+    appliedLateFromPayment: number;
+    appliedLateFromCredit: number;
+    totalApplied: number;
   }>;
 };
 
@@ -40,12 +75,14 @@ export default function DebtorsPage() {
   const [selected, setSelected] = useState<Debtor | null>(null);
   const [openDetail, setOpenDetail] = useState(false);
   const [openPay, setOpenPay] = useState(false);
-  const [selectedPeriodId, setSelectedPeriodId] = useState<number | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [receiptNumber, setReceiptNumber] = useState("");
   const [paymentDate, setPaymentDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
+  const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [paymentLocked, setPaymentLocked] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -79,38 +116,153 @@ export default function DebtorsPage() {
 
   const openPayModal = (debtor: Debtor) => {
     setSelected(debtor);
-    const period = debtor.periods.find((p) => p.pendingAmount > 0) ?? debtor.periods[0];
-    setSelectedPeriodId(period?.settlementId ?? null);
-    setPayAmount(period ? period.pendingAmount.toString() : "");
+    setPayAmount(debtor.totalDebt.toFixed(2));
     setReceiptNumber("");
+    setPaymentSummary(null);
+    setPaying(false);
+    setPaymentLocked(false);
     setOpenPay(true);
   };
 
   const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selected || !selectedPeriodId) return;
-    const period = selected.periods.find((p) => p.settlementId === selectedPeriodId);
-    if (!period) return;
-    const res = await fetch("/api/payments", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        settlementId: selectedPeriodId,
-        unitId: selected.unitId,
-        amount: Number(payAmount),
-        receiptNumber,
-        paymentDate,
-      }),
-    });
-    if (res.ok) {
-      toast.success("Pago aplicado");
-      setOpenPay(false);
-      load();
-      router.refresh();
-    } else {
-      const body = await res.json().catch(() => ({}));
-      toast.error(body.message ?? "No se pudo registrar el pago");
+    if (!selected || paying || paymentLocked) return;
+    const amountValue = Number(payAmount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) {
+      toast.error("Ingresá un monto válido");
+      return;
     }
+    setPaying(true);
+    try {
+      const res = await fetch(`/api/buildings/${buildingId}/debtors/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          unitId: selected.unitId,
+          amount: amountValue,
+          receiptNumber,
+          paymentDate,
+        }),
+      });
+      if (res.ok) {
+        const summary = (await res.json()) as PaymentSummary;
+        setPaymentSummary(summary);
+        setPaymentLocked(true);
+        toast.success("Pago aplicado");
+        load();
+        router.refresh();
+      } else {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.message ?? "No se pudo registrar el pago");
+      }
+    } catch (error) {
+      toast.error("Error de red al registrar el pago");
+      console.error(error);
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const renderDetail = (period: MorosoPeriod) => (
+    <div key={period.settlementId} className="rounded-lg border border-slate-200 p-3 text-sm">
+      <div className="flex items-center justify-between font-semibold">
+        <span>
+          {period.month}/{period.year}
+        </span>
+        <span>{formatCurrency(period.pendingAmount)}</span>
+      </div>
+      <div className="grid gap-2 text-slate-600 md:grid-cols-2">
+        <span>Deuda original: {formatCurrency(period.originalDebt)}</span>
+        <span>Pagos parciales aplicados: {formatCurrency(period.partialPayments)}</span>
+        <span>Saldo base pendiente: {formatCurrency(period.deudaPendiente)}</span>
+        <span>Meses de atraso: {period.monthsLate}</span>
+        <span>
+          Recargo calculado ({period.latePercentage}% × {period.monthsLate}): {formatCurrency(period.lateAmount)}
+        </span>
+        <span>Recargo pendiente: {formatCurrency(period.lateAmountPending)}</span>
+        <span className="col-span-2 font-semibold text-slate-900">
+          Total a pagar: {formatCurrency(period.deudaPendiente + period.lateAmountPending)}
+        </span>
+      </div>
+    </div>
+  );
+
+  const renderSummary = () => {
+    if (!paymentSummary) return null;
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
+        <h4 className="mb-2 font-semibold text-slate-900">Resumen del pago</h4>
+        <div className="grid gap-1 text-slate-700 md:grid-cols-2">
+          <span>Monto ingresado: {formatCurrency(paymentSummary.amount)}</span>
+          <span>
+            Aplicado a morosos: {formatCurrency(paymentSummary.appliedToMorosos)}
+          </span>
+          <span>Saldo moroso previo: {formatCurrency(paymentSummary.morosoPrevio)}</span>
+          <span>Saldo moroso final: {formatCurrency(paymentSummary.morosoFinal)}</span>
+          <span>Usado del pago: {formatCurrency(paymentSummary.appliedFromPayment)}</span>
+          <span>Usado de saldo a favor: {formatCurrency(paymentSummary.appliedFromCredit)}</span>
+          <span>
+            Aplicado a liquidaciones vigentes: {formatCurrency(
+              paymentSummary.appliedToUpcomingSettlements,
+            )}
+          </span>
+          <span className="col-span-2">
+            Saldo a favor disponible: {formatCurrency(paymentSummary.creditBalance)}
+          </span>
+        </div>
+        {paymentSummary.allocations.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1 text-xs font-semibold uppercase text-slate-500">
+              Distribución por liquidación
+            </p>
+            <div className="space-y-2">
+              {paymentSummary.allocations.map((alloc) => (
+                <div key={alloc.chargeId} className="rounded border border-slate-200 p-2 text-xs">
+                  <div className="flex justify-between font-semibold text-slate-800">
+                    <span>
+                      {alloc.month}/{alloc.year}
+                    </span>
+                    <span>{formatCurrency(alloc.totalApplied)}</span>
+                  </div>
+                  <p>
+                    Capital: {formatCurrency(
+                      alloc.appliedPrincipalFromPayment + alloc.appliedPrincipalFromCredit,
+                    )}
+                  </p>
+                  <p>
+                    Recargo: {formatCurrency(
+                      alloc.appliedLateFromPayment + alloc.appliedLateFromCredit,
+                    )}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {paymentSummary.upcomingSettlementAllocations.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1 text-xs font-semibold uppercase text-slate-500">
+              Adelantos aplicados a liquidaciones vigentes
+            </p>
+            <div className="space-y-2">
+              {paymentSummary.upcomingSettlementAllocations.map((alloc) => (
+                <div key={`upcoming-${alloc.chargeId}`} className="rounded border border-dashed border-slate-200 p-2 text-xs">
+                  <div className="flex justify-between font-semibold text-slate-800">
+                    <span>
+                      {alloc.month}/{alloc.year}
+                    </span>
+                    <span>{formatCurrency(alloc.appliedAmount)}</span>
+                  </div>
+                  <p>
+                    Antes: {formatCurrency(alloc.totalToPayBefore)} · Después: {formatCurrency(alloc.totalToPayAfter)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -188,35 +340,7 @@ export default function DebtorsPage() {
       >
         {selected ? (
           <div className="space-y-3">
-            {selected.periods.map((p) => (
-              <div
-                key={p.settlementId}
-                className="rounded-lg border border-slate-200 p-3 text-sm"
-              >
-                <div className="flex items-center justify-between font-semibold">
-                  <span>
-                    {p.month}/{p.year}
-                  </span>
-                  <span>{formatCurrency(p.pendingAmount)}</span>
-                </div>
-                <div className="grid gap-2 text-slate-600 md:grid-cols-2">
-                  <span>Deuda base: {formatCurrency(p.originalDebt)}</span>
-                  <span>Meses de atraso: {p.monthsLate}</span>
-                  <span>
-                    Recargo ({p.latePercentage}%): {formatCurrency(p.lateAmount)}
-                  </span>
-                  <span className="font-semibold text-slate-900">
-                    Total fijo: {formatCurrency(p.frozenTotal)}
-                  </span>
-                  <span>
-                    Pagos parciales aplicados: {formatCurrency(p.payments)}
-                  </span>
-                  <span className="col-span-2 font-semibold text-slate-900">
-                    Deuda total actual: {formatCurrency(p.pendingAmount)}
-                  </span>
-                </div>
-              </div>
-            ))}
+            {selected.periods.map(renderDetail)}
           </div>
         ) : (
           <p className="text-sm text-slate-500">Selecciona un moroso para ver el detalle.</p>
@@ -230,24 +354,9 @@ export default function DebtorsPage() {
       >
         {selected && (
           <form className="space-y-4" onSubmit={submitPayment}>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-600">Período</label>
-              <select
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                value={selectedPeriodId ?? ""}
-                onChange={(e) => {
-                  const id = Number(e.target.value);
-                  setSelectedPeriodId(id);
-                  const period = selected.periods.find((p) => p.settlementId === id);
-                  if (period) setPayAmount(period.pendingAmount.toString());
-                }}
-              >
-                {selected.periods.map((p) => (
-                  <option key={p.settlementId} value={p.settlementId}>
-                    {p.month}/{p.year} · {formatCurrency(p.pendingAmount)}
-                  </option>
-                ))}
-              </select>
+            <div className="rounded-lg border border-dashed border-slate-300 p-3 text-sm">
+              <p>Saldo moroso: {formatCurrency(selected.totalDebt)}</p>
+              <p>Saldo a favor disponible: {formatCurrency(selected.creditBalance)}</p>
             </div>
             <Input
               label="Monto a pagar"
@@ -255,6 +364,7 @@ export default function DebtorsPage() {
               step="0.01"
               value={payAmount}
               onChange={(e) => setPayAmount(e.target.value)}
+              required
             />
             <Input
               label="Número de recibo"
@@ -268,12 +378,29 @@ export default function DebtorsPage() {
               value={paymentDate}
               onChange={(e) => setPaymentDate(e.target.value)}
             />
+            <p className="text-xs text-slate-500">
+              El pago se distribuirá automáticamente desde la liquidación más antigua hacia la más reciente.
+            </p>
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="secondary" type="button" onClick={() => setOpenPay(false)}>
                 Cancelar
               </Button>
-              <Button type="submit">Confirmar pago</Button>
+              <div className="space-y-1">
+                <Button
+                  type="submit"
+                  loading={paying}
+                  disabled={paymentLocked}
+                >
+                  {paymentLocked ? "Pago registrado" : "Confirmar pago"}
+                </Button>
+                {paymentLocked && (
+                  <p className="text-xs text-slate-500">
+                    Este pago ya se confirmó. Cerrá el modal para iniciar otro.
+                  </p>
+                )}
+              </div>
             </div>
+            {renderSummary()}
           </form>
         )}
       </Modal>
