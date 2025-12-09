@@ -120,6 +120,7 @@ export default function SettlementsPage() {
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountData, setAccountData] = useState<AccountHistory>(null);
+  const [search, setSearch] = useState("");
 
   const discountLabel = `${Math.round(EARLY_PAYMENT_DISCOUNT_RATE * 100)}%`;
 
@@ -259,6 +260,15 @@ export default function SettlementsPage() {
     loadData();
   }, [month, year, buildingId]);
 
+  const filteredCharges = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return charges;
+    return charges.filter((c) =>
+      c.unitCode.toLowerCase().includes(query) ||
+      (c.responsable ?? "").toLowerCase().includes(query),
+    );
+  }, [charges, search]);
+
   const handleNewSettlement = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await fetch(`/api/buildings/${buildingId}/settlements`, {
@@ -386,6 +396,14 @@ export default function SettlementsPage() {
           </Button>
         </div>
         <div className="flex-1" />
+        <div className="w-full max-w-xs">
+          <Input
+            label="Buscar unidad o responsable"
+            value={search}
+            placeholder="Ej: 12-A o García"
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         {settlement && (
           <Button variant="danger" onClick={() => setDeleteOpen(true)}>
             Eliminar liquidación
@@ -473,7 +491,12 @@ export default function SettlementsPage() {
                 <Td colSpan={7}>Sin cargos en esta liquidación.</Td>
               </Tr>
             )}
-            {charges.map((c) => {
+            {charges.length > 0 && filteredCharges.length === 0 && (
+              <Tr>
+                <Td colSpan={7}>No se encontraron resultados para "{search}".</Td>
+              </Tr>
+            )}
+            {filteredCharges.map((c) => {
               const state = getChargeState(c);
               const dueInfo = computeDueForDate(c, today);
               return (

@@ -33,7 +33,7 @@ export function Table({
 
 export function THead({ children }: { children: React.ReactNode }) {
   return (
-    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
+    <thead className="sticky top-0 z-20 bg-slate-50 text-xs uppercase tracking-wide text-slate-600">
       {children}
     </thead>
   );
