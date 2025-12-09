@@ -149,10 +149,10 @@ export default function SettlementsPage() {
       state.currentOutstandingNominal > 0 &&
       discountStats.remaining > 0
     ) {
-      const theoretical = roundTwo(
-        state.currentOutstandingNominal * EARLY_PAYMENT_DISCOUNT_RATE,
+      discountPreview = Math.min(
+        discountStats.remaining,
+        state.currentOutstandingNominal,
       );
-      discountPreview = Math.min(theoretical, discountStats.remaining);
     }
     const currentDue = Math.max(
       0,
@@ -499,11 +499,33 @@ export default function SettlementsPage() {
             {filteredCharges.map((c) => {
               const state = getChargeState(c);
               const dueInfo = computeDueForDate(c, today);
+              const discountCap = roundTwo(
+                Number(c.currentFee ?? 0) * EARLY_PAYMENT_DISCOUNT_RATE,
+              );
+              const discountedCurrentFee = Math.max(
+                0,
+                roundTwo(Number(c.currentFee ?? 0) - discountCap),
+              );
+              const firstDueDate = settlement?.dueDate1
+                ? new Date(settlement.dueDate1)
+                : null;
+              const showDiscountInfo =
+                firstDueDate &&
+                !Number.isNaN(firstDueDate.getTime()) &&
+                today <= firstDueDate &&
+                discountCap > 0;
               return (
                 <Tr key={c.id}>
                   <Td className="font-semibold">{c.unitCode}</Td>
                   <Td>{c.responsable}</Td>
-                  <Td className="text-right">{moneyOrDash(c.currentFee)}</Td>
+                  <Td className="text-right">
+                    {moneyOrDash(c.currentFee)}
+                    {showDiscountInfo && (
+                      <span className="block text-xs text-emerald-600">
+                        Con {discountLabel}: {formatCurrency(discountedCurrentFee)}
+                      </span>
+                    )}
+                  </Td>
                   <Td className="text-right">
                     {moneyOrDash(state.currentPaid)}
                   </Td>

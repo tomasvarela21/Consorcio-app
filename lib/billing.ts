@@ -92,26 +92,7 @@ export function calculateEarlyPaymentDiscount({
     return 0;
   }
 
-  if (amountForCurrent >= currentOutstandingNominal - 0.005) {
-    return 0;
-  }
-
-  const nominalCapByPayment =
-    amountForCurrent / (1 - EARLY_PAYMENT_DISCOUNT_RATE);
-  const nominalCapByDiscount =
-    discountRemaining / EARLY_PAYMENT_DISCOUNT_RATE;
-  const usableNominal = Math.min(
-    currentOutstandingNominal,
-    nominalCapByPayment,
-    nominalCapByDiscount,
-  );
-
-  if (usableNominal <= 0) {
-    return 0;
-  }
-
-  const discount = roundTwo(usableNominal * EARLY_PAYMENT_DISCOUNT_RATE);
-  return Math.min(discount, discountRemaining);
+  return Math.min(discountRemaining, currentOutstandingNominal);
 }
 
 export function roundTwo(value: number) {
