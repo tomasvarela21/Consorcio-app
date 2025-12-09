@@ -47,6 +47,7 @@ model Unit {
   id                Int                @id @default(autoincrement())
   buildingId        Int
   code              String
+  padron            String?            @unique
   percentage        Decimal            @db.Decimal(10, 4)
   accountStatus     AccountStatus      @default(ON_TIME)
   creditBalance     Decimal            @default(0) @db.Decimal(12, 2)

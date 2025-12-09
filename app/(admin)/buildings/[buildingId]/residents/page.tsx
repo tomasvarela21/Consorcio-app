@@ -13,6 +13,7 @@ import { compareUnitCodes } from "@/lib/sort";
 type ResidentRow = {
   id: number;
   code: string;
+  padron?: string | null;
   responsible: string | null;
   percentage: number;
   accountStatus: string;
@@ -41,6 +42,8 @@ const ROLE_TABS: { key: RoleKey; label: string }[] = [
   { key: "INMOBILIARIA", label: "Inmobiliaria" },
 ];
 
+const PADRON_REGEX = /^[A-Za-z0-9-]+$/;
+
 export default function ResidentsPage() {
   const params = useParams<{ buildingId: string }>();
   const buildingId = Number(params.buildingId);
@@ -56,6 +59,7 @@ export default function ResidentsPage() {
   const [openEdit, setOpenEdit] = useState(false);
   const [selected, setSelected] = useState<any>(null);
   const [unitCode, setUnitCode] = useState("");
+  const [padron, setPadron] = useState("");
   const [percentage, setPercentage] = useState("");
   const [percentageCoverage, setPercentageCoverage] = useState(0);
 
@@ -67,6 +71,14 @@ export default function ResidentsPage() {
   // pestañas activas para cada modal
   const [createActiveTab, setCreateActiveTab] = useState<RoleKey>("RESPONSABLE");
   const [editActiveTab, setEditActiveTab] = useState<RoleKey>("RESPONSABLE");
+
+  const normalizedPadron = padron.trim();
+  const padronInputError =
+    normalizedPadron.length === 0
+      ? "Completar padrón (opcional)"
+      : !PADRON_REGEX.test(normalizedPadron)
+        ? "Solo letras, números y guiones"
+        : undefined;
 
   const fetchResidents = async () => {
     setLoading(true);
@@ -98,6 +110,7 @@ export default function ResidentsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    const padronClean = padron.trim();
     if (!unitCode || !percentage) {
       toast.error("Unidad y porcentaje son obligatorios");
       setLoading(false);
@@ -108,6 +121,11 @@ export default function ResidentsPage() {
       setLoading(false);
       return;
     }
+    if (padronClean && !PADRON_REGEX.test(padronClean)) {
+      toast.error("El padrón solo acepta letras, números o guiones");
+      setLoading(false);
+      return;
+    }
     const res = await fetch("/api/units", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -115,6 +133,7 @@ export default function ResidentsPage() {
         buildingId,
         code: unitCode,
         percentage: Number(percentage),
+        padron: padronClean || null,
         contacts: { inquilino, responsable, propietario, inmobiliaria },
       }),
     });
@@ -122,6 +141,7 @@ export default function ResidentsPage() {
       toast.success("Residente registrado");
       setOpen(false);
       setUnitCode("");
+      setPadron("");
       setPercentage("");
       setInquilino(emptyContact());
       setResponsable(emptyContact());
@@ -155,6 +175,7 @@ export default function ResidentsPage() {
       const payload = await res.json();
       setSelected(payload);
       setUnitCode(payload.code);
+      setPadron(payload.padron ?? "");
       setPercentage(String(payload.percentage));
       const toForm = (role: string) => {
         const c = payload.contacts.find((ct: any) => ct.role === role);
@@ -182,6 +203,7 @@ export default function ResidentsPage() {
     e.preventDefault();
     if (!selected) return;
     setLoading(true);
+    const padronClean = padron.trim();
     if (!unitCode || !percentage) {
       toast.error("Unidad y porcentaje son obligatorios");
       setLoading(false);
@@ -192,12 +214,18 @@ export default function ResidentsPage() {
       setLoading(false);
       return;
     }
+    if (padronClean && !PADRON_REGEX.test(padronClean)) {
+      toast.error("El padrón solo acepta letras, números o guiones");
+      setLoading(false);
+      return;
+    }
     const res = await fetch(`/api/units/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         code: unitCode,
         percentage: Number(percentage),
+        padron: padronClean || null,
         contacts: { inquilino, responsable, propietario, inmobiliaria },
       }),
     });
@@ -243,7 +271,7 @@ export default function ResidentsPage() {
 
       <div className="flex items-center gap-3">
         <Input
-          placeholder="Buscar por unidad o responsable"
+          placeholder="Buscar por unidad, padrón o responsable"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -334,7 +362,7 @@ export default function ResidentsPage() {
       {/* MODAL CREAR */}
       <Modal open={open} onClose={() => setOpen(false)} title="Registrar nuevo residente">
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <Input
               label="Unidad (ej: A-1)"
               value={unitCode}
@@ -349,6 +377,13 @@ export default function ResidentsPage() {
               value={percentage}
               onChange={(e) => setPercentage(e.target.value)}
               required
+            />
+            <Input
+              label="Padrón"
+              placeholder="AA-0000"
+              value={padron}
+              onChange={(e) => setPadron(e.target.value)}
+              error={padronInputError}
             />
           </div>
 
@@ -416,6 +451,14 @@ export default function ResidentsPage() {
               <span className="font-semibold">Unidad:</span> {selected.code}
             </p>
             <p>
+              <span className="font-semibold">Padrón:</span>{" "}
+              {selected.padron ? (
+                selected.padron
+              ) : (
+                <span className="text-red-500">Sin padrón</span>
+              )}
+            </p>
+            <p>
               <span className="font-semibold">Porcentaje:</span>{" "}
               {selected.percentage}%
             </p>
@@ -449,7 +492,7 @@ export default function ResidentsPage() {
       {/* MODAL EDITAR */}
       <Modal open={openEdit} onClose={() => setOpenEdit(false)} title="Editar residente">
         <form className="space-y-4" onSubmit={handleUpdate}>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <Input
               label="Unidad (ej: A-1)"
               value={unitCode}
@@ -464,6 +507,13 @@ export default function ResidentsPage() {
               value={percentage}
               onChange={(e) => setPercentage(e.target.value)}
               required
+            />
+            <Input
+              label="Padrón"
+              placeholder="AA-0000"
+              value={padron}
+              onChange={(e) => setPadron(e.target.value)}
+              error={padronInputError}
             />
           </div>
 

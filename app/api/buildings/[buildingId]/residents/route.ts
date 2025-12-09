@@ -45,6 +45,12 @@ export async function GET(
         },
       },
       {
+        padron: {
+          contains: search,
+          mode: Prisma.QueryMode.insensitive,
+        },
+      },
+      {
         contacts: {
           some: {
             role: "RESPONSABLE",
@@ -97,6 +103,7 @@ export async function GET(
     return {
       id: u.id,
       code: u.code,
+      padron: u.padron,
       percentage: Number(u.percentage),
       accountStatus: hasDebt ? "WITH_DEBT" : "ON_TIME",
       responsible: responsible?.fullName ?? null,
