@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
+import { compareUnitCodes } from "@/lib/sort";
 
 type Params = {
   buildingId: string;
@@ -57,14 +58,11 @@ export async function GET(
     ];
   }
 
-  const [total, units, percentageAgg] = await Promise.all([
+  const [total, unitsRaw, percentageAgg] = await Promise.all([
     prisma.unit.count({ where }),
     prisma.unit.findMany({
       where,
       include: { contacts: true },
-      skip,
-      take: pageSize,
-      orderBy: { code: "asc" },
     }),
     prisma.unit.aggregate({
       where: { buildingId },
@@ -72,7 +70,10 @@ export async function GET(
     }),
   ]);
 
-  const unitIds = units.map((u) => u.id);
+  const orderedUnits = [...unitsRaw].sort((a, b) => compareUnitCodes(a.code, b.code));
+  const paginatedUnits = orderedUnits.slice(skip, skip + pageSize);
+
+  const unitIds = paginatedUnits.map((u) => u.id);
   let overdueUnits = new Set<number>();
   if (unitIds.length > 0) {
     const today = new Date();
@@ -90,7 +91,7 @@ export async function GET(
     overdueUnits = new Set(overdueCharges.map((c) => c.unitId));
   }
 
-  const data = units.map((u) => {
+  const data = paginatedUnits.map((u) => {
     const responsible = u.contacts.find((c) => c.role === "RESPONSABLE");
     const hasDebt = overdueUnits.has(u.id);
     return {

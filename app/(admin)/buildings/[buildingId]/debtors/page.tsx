@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { formatCurrency } from "@/lib/format";
+import { compareUnitCodes } from "@/lib/sort";
 
 type MorosoPeriod = {
   settlementId: number;
@@ -88,7 +89,13 @@ export default function DebtorsPage() {
     setLoading(true);
     const res = await fetch(`/api/buildings/${buildingId}/debtors`);
     if (res.ok) {
-      setRows(await res.json());
+      const payload = await res.json();
+      const ordered = Array.isArray(payload)
+        ? [...payload].sort((a: Debtor, b: Debtor) =>
+            compareUnitCodes(a.unitCode, b.unitCode),
+          )
+        : [];
+      setRows(ordered);
     } else {
       toast.error("No pudimos cargar morosos");
     }

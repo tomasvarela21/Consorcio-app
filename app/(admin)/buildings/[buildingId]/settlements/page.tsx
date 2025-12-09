@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
+import { compareUnitCodes } from "@/lib/sort";
 import {
   EARLY_PAYMENT_DISCOUNT_RATE,
   getChargePortions,
@@ -228,12 +229,17 @@ export default function SettlementsPage() {
     if (res.ok) {
       const body = await res.json();
       setSettlement(body.settlement);
-      setCharges(body.charges || []);
-      if (body.charges?.length) {
+      const orderedCharges: ChargeRow[] = Array.isArray(body.charges)
+        ? [...body.charges].sort((a: ChargeRow, b: ChargeRow) =>
+            compareUnitCodes(a.unitCode, b.unitCode),
+          )
+        : [];
+      setCharges(orderedCharges);
+      if (orderedCharges.length) {
         const totalExpense = body.settlement?.totalExpense ?? 0;
         const collected =
-          body.charges.reduce(
-            (acc: number, c: any) =>
+          orderedCharges.reduce(
+            (acc: number, c: ChargeRow) =>
               acc + (c.currentFee + c.previousBalance - c.totalToPay),
             0,
           ) ?? 0;

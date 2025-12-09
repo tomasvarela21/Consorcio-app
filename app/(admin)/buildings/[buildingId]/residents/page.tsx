@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { compareUnitCodes } from "@/lib/sort";
 
 type ResidentRow = {
   id: number;
@@ -76,7 +77,12 @@ export default function ResidentsPage() {
     );
     if (res.ok) {
       const body = await res.json();
-      setData(body.data);
+      const sorted = Array.isArray(body.data)
+        ? [...body.data].sort((a: ResidentRow, b: ResidentRow) =>
+            compareUnitCodes(a.code, b.code),
+          )
+        : [];
+      setData(sorted);
       setTotal(body.total);
       setPercentageCoverage(body.percentageSum ?? 0);
     } else {
