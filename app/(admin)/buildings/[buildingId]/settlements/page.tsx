@@ -324,6 +324,8 @@ export default function SettlementsPage() {
       setPaymentFeedback(body.summary ?? null);
       toast.success("Pago registrado");
       loadData();
+      setOpenPayment(false);
+      setSelectedCharge(null);
     } else {
       toast.error(body.message ?? "Error al registrar pago");
     }

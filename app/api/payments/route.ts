@@ -50,7 +50,8 @@ export async function POST(req: Request) {
     );
   }
   const paymentDateValue = paymentDate ? new Date(paymentDate) : new Date();
-  const paymentResult = await prisma.$transaction(async (tx) => {
+  const paymentResult = await prisma.$transaction(
+    async (tx) => {
     const unitRecord = await tx.unit.findUnique({ where: { id: unitId } });
     if (!unitRecord) {
       throw new Error("Unidad inexistente");
@@ -174,7 +175,9 @@ export async function POST(req: Request) {
       upcomingApplication,
       creditBalance: creditPool,
     };
-  });
+    },
+    { maxWait: 10_000, timeout: 30_000 },
+  );
 
   return NextResponse.json({
     payment: {
