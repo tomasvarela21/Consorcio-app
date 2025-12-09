@@ -77,7 +77,7 @@ export default function ResidentsPage() {
   const normalizedPadron = padron.trim();
   const padronInputError =
     normalizedPadron.length === 0
-      ? "Completar padrón (opcional)"
+      ? "Completar padrón (importante)"
       : !PADRON_REGEX.test(normalizedPadron)
         ? "Solo letras, números y guiones"
         : undefined;
@@ -283,6 +283,23 @@ export default function ResidentsPage() {
     }
   };
 
+  const resetCreateForm = () => {
+    setSelected(null);
+    setUnitCode("");
+    setPadron("");
+    setPercentage("");
+    setInquilino(emptyContact());
+    setResponsable(emptyContact());
+    setPropietario(emptyContact());
+    setInmobiliaria(emptyContact());
+    setCreateActiveTab("RESPONSABLE");
+  };
+
+  const openCreateModal = () => {
+    resetCreateForm();
+    setOpen(true);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -292,7 +309,7 @@ export default function ResidentsPage() {
             Unidades, responsables de pago y porcentajes.
           </p>
         </div>
-        <Button onClick={() => setOpen(true)}>Registrar nuevo residente</Button>
+        <Button onClick={openCreateModal}>Registrar nuevo residente</Button>
       </div>
 
       <PercentageCoverageAlert value={percentageCoverage} />
@@ -331,7 +348,7 @@ export default function ResidentsPage() {
                   <span className="text-slate-500">
                     Este edificio aun no tiene residentes cargados.
                   </span>
-                  <Button onClick={() => setOpen(true)}>
+                  <Button onClick={openCreateModal}>
                     Registrar primer residente
                   </Button>
                 </div>
