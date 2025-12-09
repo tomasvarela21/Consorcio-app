@@ -43,6 +43,8 @@ const ROLE_TABS: { key: RoleKey; label: string }[] = [
 ];
 
 const PADRON_REGEX = /^[A-Za-z0-9-]+$/;
+const COVERAGE_LIMIT = 100;
+const COVERAGE_EPSILON = 0.0001;
 
 export default function ResidentsPage() {
   const params = useParams<{ buildingId: string }>();
@@ -111,8 +113,14 @@ export default function ResidentsPage() {
     e.preventDefault();
     setLoading(true);
     const padronClean = padron.trim();
+    const percentageValue = Number(percentage);
     if (!unitCode || !percentage) {
       toast.error("Unidad y porcentaje son obligatorios");
+      setLoading(false);
+      return;
+    }
+    if (Number.isNaN(percentageValue)) {
+      toast.error("Ingresa un porcentaje válido");
       setLoading(false);
       return;
     }
@@ -126,13 +134,19 @@ export default function ResidentsPage() {
       setLoading(false);
       return;
     }
+    const projectedCoverage = percentageCoverage + percentageValue;
+    if (projectedCoverage > COVERAGE_LIMIT + COVERAGE_EPSILON) {
+      toast.error("La suma de porcentajes superaría el 100%. Ajusta otras unidades antes de continuar.");
+      setLoading(false);
+      return;
+    }
     const res = await fetch("/api/units", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         buildingId,
         code: unitCode,
-        percentage: Number(percentage),
+        percentage: percentageValue,
         padron: padronClean || null,
         contacts: { inquilino, responsable, propietario, inmobiliaria },
       }),
@@ -204,8 +218,14 @@ export default function ResidentsPage() {
     if (!selected) return;
     setLoading(true);
     const padronClean = padron.trim();
+    const percentageValue = Number(percentage);
     if (!unitCode || !percentage) {
       toast.error("Unidad y porcentaje son obligatorios");
+      setLoading(false);
+      return;
+    }
+    if (Number.isNaN(percentageValue)) {
+      toast.error("Ingresa un porcentaje válido");
       setLoading(false);
       return;
     }
@@ -219,12 +239,20 @@ export default function ResidentsPage() {
       setLoading(false);
       return;
     }
+    const previousPercentage = Number(selected.percentage ?? 0);
+    const projectedCoverage =
+      percentageCoverage - previousPercentage + percentageValue;
+    if (projectedCoverage > COVERAGE_LIMIT + COVERAGE_EPSILON) {
+      toast.error("La suma de porcentajes superaría el 100%. Ajusta otras unidades antes de continuar.");
+      setLoading(false);
+      return;
+    }
     const res = await fetch(`/api/units/${selected.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         code: unitCode,
-        percentage: Number(percentage),
+        percentage: percentageValue,
         padron: padronClean || null,
         contacts: { inquilino, responsable, propietario, inmobiliaria },
       }),

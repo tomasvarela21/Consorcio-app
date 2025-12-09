@@ -12,6 +12,8 @@ type ContactPayload = {
 };
 
 const PADRON_REGEX = /^[a-zA-Z0-9-]+$/;
+const COVERAGE_LIMIT = 100;
+const COVERAGE_EPSILON = 0.0001;
 
 export async function POST(req: Request) {
   const session = await getAdminSession();
@@ -21,10 +23,12 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const { buildingId, code, percentage, contacts = {} } = body;
+  const buildingIdNumber = Number(buildingId);
+  const percentageValue = Number(percentage);
   const rawPadron: string =
     typeof body.padron === "string" ? body.padron.trim() : "";
 
-  if (!buildingId || !code || !percentage) {
+  if (!buildingIdNumber || !code || Number.isNaN(percentageValue)) {
     return NextResponse.json(
       { message: "Unidad, porcentaje y edificio son obligatorios" },
       { status: 400 },
@@ -46,6 +50,18 @@ export async function POST(req: Request) {
     );
   }
 
+  const coverageResult = await prisma.unit.aggregate({
+    where: { buildingId: buildingIdNumber },
+    _sum: { percentage: true },
+  });
+  const currentCoverage = Number(coverageResult._sum.percentage ?? 0);
+  if (currentCoverage + percentageValue > COVERAGE_LIMIT + COVERAGE_EPSILON) {
+    return NextResponse.json(
+      { message: "La suma de porcentajes superaría el 100%. Ajusta otras unidades antes de continuar." },
+      { status: 400 },
+    );
+  }
+
   if (rawPadron) {
     const exists = await prisma.unit.findFirst({
       where: { padron: rawPadron },
@@ -62,9 +78,9 @@ export async function POST(req: Request) {
   try {
     const unit = await prisma.unit.create({
       data: {
-        buildingId,
+        buildingId: buildingIdNumber,
         code,
-        percentage,
+        percentage: percentageValue,
         padron: rawPadron || null,
         accountStatus: "ON_TIME",
       },

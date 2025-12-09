@@ -5,6 +5,8 @@ import type { ContactRole } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 
 const PADRON_REGEX = /^[a-zA-Z0-9-]+$/;
+const COVERAGE_LIMIT = 100;
+const COVERAGE_EPSILON = 0.0001;
 
 export async function GET(
   _req: Request,
@@ -61,10 +63,11 @@ export async function PATCH(
 
   const body = await req.json().catch(() => ({}));
   const { code, percentage, contacts = {} } = body;
+  const percentageValue = Number(percentage);
   const rawPadron: string =
     typeof body.padron === "string" ? body.padron.trim() : "";
 
-  if (!code || !percentage) {
+  if (!code || Number.isNaN(percentageValue)) {
     return NextResponse.json(
       { message: "Unidad y porcentaje son obligatorios" },
       { status: 400 },
@@ -77,6 +80,14 @@ export async function PATCH(
       { message: "El responsable de pago necesita nombre y celular" },
       { status: 400 },
     );
+  }
+
+  const existingUnit = await prisma.unit.findUnique({
+    where: { id: unitId },
+    select: { percentage: true, buildingId: true },
+  });
+  if (!existingUnit) {
+    return NextResponse.json({ message: "No encontrado" }, { status: 404 });
   }
 
   if (rawPadron && !PADRON_REGEX.test(rawPadron)) {
@@ -100,6 +111,20 @@ export async function PATCH(
         { status: 409 },
       );
     }
+  }
+
+  const coverageResult = await prisma.unit.aggregate({
+    where: { buildingId: existingUnit.buildingId },
+    _sum: { percentage: true },
+  });
+  const currentCoverage = Number(coverageResult._sum.percentage ?? 0);
+  const previousPercentage = Number(existingUnit.percentage);
+  const updatedCoverage = currentCoverage - previousPercentage + percentageValue;
+  if (updatedCoverage > COVERAGE_LIMIT + COVERAGE_EPSILON) {
+    return NextResponse.json(
+      { message: "La suma de porcentajes superaría el 100%. Ajusta otras unidades antes de continuar." },
+      { status: 400 },
+    );
   }
 
   const toContact = (
@@ -135,7 +160,7 @@ export async function PATCH(
     await prisma.$transaction([
       prisma.unit.update({
         where: { id: unitId },
-        data: { code, percentage, padron: rawPadron || null },
+        data: { code, percentage: percentageValue, padron: rawPadron || null },
       }),
       prisma.contact.deleteMany({ where: { unitId } }),
       prisma.contact.createMany({ data: newContacts }),
