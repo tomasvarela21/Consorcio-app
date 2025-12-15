@@ -255,7 +255,8 @@ export type ApplyMorosoFundsResult = {
   totalApplied: number;
   totalAppliedFromPayment: number;
   totalAppliedFromCredit: number;
-  remainingCredit: number;
+  remainingFromPayment: number;
+  remainingFromCredit: number;
   allocations: MorosoAllocation[];
 };
 
@@ -284,6 +285,7 @@ export async function applyFundsToMorosos({
   receiptNumber,
   notes,
   client = prisma,
+  creditMovementPaymentId,
 }: {
   unitId: number;
   referenceDate?: Date;
@@ -293,12 +295,14 @@ export async function applyFundsToMorosos({
   receiptNumber?: string;
   notes?: string;
   client?: PrismaClientOrTx;
+  creditMovementPaymentId?: number;
 }): Promise<ApplyMorosoFundsResult> {
   const charges = await getMorosoChargesData(client, unitId, referenceDate);
   if (!charges.length) {
     return {
       allocations: [],
-      remainingCredit: roundTwo(amountFromPayment + amountFromCredit),
+      remainingFromPayment: roundTwo(Math.max(0, amountFromPayment)),
+      remainingFromCredit: roundTwo(Math.max(0, amountFromCredit)),
       totalApplied: 0,
       totalAppliedFromPayment: 0,
       totalAppliedFromCredit: 0,
@@ -415,16 +419,32 @@ export async function applyFundsToMorosos({
     totalFromCredit = roundTwo(
       totalFromCredit + applyPrincipalFromCredit + applyLateFromCredit,
     );
-  }
 
-  const remaining = roundTwo(remainingPayment + remainingCredit);
+    const creditUsedForCharge = roundTwo(
+      applyPrincipalFromCredit + applyLateFromCredit,
+    );
+    if (creditUsedForCharge > 0) {
+      await client.creditMovement.create({
+        data: {
+          unitId,
+          paymentId: creditMovementPaymentId ?? null,
+          settlementId: charge.settlementId,
+          settlementChargeId: charge.id,
+          amount: creditUsedForCharge,
+          movementType: "DEBIT",
+          description: `Aplicado a moroso ${charge.settlement.month}/${charge.settlement.year}`,
+        },
+      });
+    }
+  }
 
   return {
     allocations,
     totalApplied,
     totalAppliedFromPayment: totalFromPayment,
     totalAppliedFromCredit: totalFromCredit,
-    remainingCredit: remaining,
+    remainingFromPayment: remainingPayment,
+    remainingFromCredit: remainingCredit,
   };
 }
 
@@ -446,11 +466,13 @@ export async function applyCreditToUpcomingSettlements({
   referenceDate = new Date(),
   availableCredit,
   client = prisma,
+  creditMovementPaymentId,
 }: {
   unitId: number;
   referenceDate?: Date;
   availableCredit: number;
   client?: PrismaClientOrTx;
+  creditMovementPaymentId?: number;
 }): Promise<ApplyCreditToSettlementsResult> {
   let remaining = roundTwo(Math.max(0, availableCredit));
   if (remaining <= 0) {
@@ -496,6 +518,18 @@ export async function applyCreditToUpcomingSettlements({
     });
     totalApplied = roundTwo(totalApplied + applied);
     remaining = roundTwo(remaining - applied);
+
+    await client.creditMovement.create({
+      data: {
+        unitId,
+        paymentId: creditMovementPaymentId ?? null,
+        settlementId: charge.settlementId,
+        settlementChargeId: charge.id,
+        amount: applied,
+        movementType: "DEBIT",
+        description: `Aplicado a liquidación ${charge.settlement.month}/${charge.settlement.year}`,
+      },
+    });
   }
   return { allocations, totalApplied, remainingCredit: remaining };
 }

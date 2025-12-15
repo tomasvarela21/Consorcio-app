@@ -132,6 +132,20 @@ export async function POST(req: Request) {
       roundTwo(amountNumber - pagoEfectivoLiquidacion),
     );
 
+    if (excedentePagoActual > 0) {
+      await tx.creditMovement.create({
+        data: {
+          unitId,
+          paymentId: payment.id,
+          settlementId,
+          settlementChargeId: charge.id,
+          amount: excedentePagoActual,
+          movementType: "CREDIT",
+          description: `Excedente pago liquidación ${settlement.month}/${settlement.year}`,
+        },
+      });
+    }
+
     let creditPool = roundTwo(creditBalanceBefore + excedentePagoActual);
     let morosoApplication = null;
     let upcomingApplication = null;
@@ -142,8 +156,11 @@ export async function POST(req: Request) {
         referenceDate: paymentDateValue,
         amountFromPayment: 0,
         amountFromCredit: creditPool,
+        creditMovementPaymentId: payment.id,
       });
-      creditPool = morosoApplication.remainingCredit;
+      creditPool = roundTwo(
+        morosoApplication.remainingFromCredit + morosoApplication.remainingFromPayment,
+      );
     }
     if (creditPool > 0) {
       upcomingApplication = await applyCreditToUpcomingSettlements({
@@ -151,6 +168,7 @@ export async function POST(req: Request) {
         unitId,
         referenceDate: paymentDateValue,
         availableCredit: creditPool,
+        creditMovementPaymentId: payment.id,
       });
       creditPool = upcomingApplication.remainingCredit;
     }

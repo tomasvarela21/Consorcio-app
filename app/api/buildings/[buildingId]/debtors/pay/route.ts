@@ -80,11 +80,26 @@ export async function POST(
         receiptNumber,
         notes,
       });
+      let creditPool = roundTwo(application.remainingFromCredit);
+      if (application.remainingFromPayment > 0) {
+        await tx.creditMovement.create({
+          data: {
+            unitId: unitIdNumber,
+            paymentId: null,
+            settlementId: null,
+            settlementChargeId: null,
+            amount: application.remainingFromPayment,
+            movementType: "CREDIT",
+            description: `Excedente pago morosos - Recibo ${receiptNumber}`,
+          },
+        });
+        creditPool = roundTwo(creditPool + application.remainingFromPayment);
+      }
       const futureSettlements = await applyCreditToUpcomingSettlements({
         client: tx,
         unitId: unitIdNumber,
         referenceDate: paymentDateValue,
-        availableCredit: application.remainingCredit,
+        availableCredit: creditPool,
       });
       await tx.unit.update({
         where: { id: unitIdNumber },

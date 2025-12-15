@@ -36,6 +36,7 @@ export async function GET(
     padron: unit.padron,
     percentage: Number(unit.percentage),
     accountStatus: unit.accountStatus,
+    creditBalance: Number(unit.creditBalance ?? 0),
     contacts: unit.contacts.map((c) => ({
       id: c.id,
       role: c.role,

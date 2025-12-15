@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { compareUnitCodes } from "@/lib/sort";
+import { formatCurrency } from "@/lib/format";
 
 type ResidentRow = {
   id: number;
@@ -24,6 +25,21 @@ type ContactForm = {
   dni: string;
   phone: string;
   address: string;
+};
+
+type CreditMovementEntry = {
+  id: number;
+  type: "CREDIT" | "DEBIT";
+  amount: number;
+  description: string;
+  createdAt: string;
+  settlement?: { month: number; year: number } | null;
+  payment?: { id: number; receiptNumber: string | null } | null;
+};
+
+type CreditLedger = {
+  balance: number;
+  movements: CreditMovementEntry[];
 };
 
 type RoleKey = "INQUILINO" | "RESPONSABLE" | "PROPIETARIO" | "INMOBILIARIA";
@@ -64,6 +80,8 @@ export default function ResidentsPage() {
   const [padron, setPadron] = useState("");
   const [percentage, setPercentage] = useState("");
   const [percentageCoverage, setPercentageCoverage] = useState(0);
+  const [creditLedger, setCreditLedger] = useState<CreditLedger | null>(null);
+  const [creditLedgerLoading, setCreditLedgerLoading] = useState(false);
 
   const [inquilino, setInquilino] = useState<ContactForm>(emptyContact());
   const [responsable, setResponsable] = useState<ContactForm>(emptyContact());
@@ -172,12 +190,54 @@ export default function ResidentsPage() {
 
   const pages = Math.ceil(total / pageSize);
 
+  const loadCreditLedger = async (unitId: number) => {
+    setCreditLedger(null);
+    setCreditLedgerLoading(true);
+    try {
+      const res = await fetch(`/api/units/${unitId}/credit-movements`);
+      if (res.ok) {
+        const body = await res.json();
+        const movements: CreditMovementEntry[] = Array.isArray(body.movements)
+          ? body.movements.map((m: any) => ({
+              id: m.id,
+              type: m.type === "DEBIT" ? "DEBIT" : "CREDIT",
+              amount: Number(m.amount ?? 0),
+              description: m.description ?? "",
+              createdAt: typeof m.createdAt === "string" ? m.createdAt : new Date().toISOString(),
+              settlement: m.settlement
+                ? { month: Number(m.settlement.month), year: Number(m.settlement.year) }
+                : null,
+              payment: m.payment
+                ? {
+                    id: m.payment.id,
+                    receiptNumber: m.payment.receiptNumber ?? null,
+                  }
+                : null,
+            }))
+          : [];
+        setCreditLedger({
+          balance: Number(body.balance ?? 0),
+          movements,
+        });
+      } else {
+        setCreditLedger(null);
+        toast.error("No pudimos cargar el estado de saldo a favor");
+      }
+    } catch (_err) {
+      setCreditLedger(null);
+      toast.error("No pudimos cargar el estado de saldo a favor");
+    } finally {
+      setCreditLedgerLoading(false);
+    }
+  };
+
   const openView = async (unitId: number) => {
     const res = await fetch(`/api/units/${unitId}`);
     if (res.ok) {
       const payload = await res.json();
       setSelected(payload);
       setOpenDetail(true);
+      loadCreditLedger(unitId);
     } else {
       toast.error("No pudimos cargar el residente");
     }
@@ -511,6 +571,10 @@ export default function ResidentsPage() {
               <span className="font-semibold">Estado:</span>{" "}
               {selected.accountStatus}
             </p>
+            <p>
+              <span className="font-semibold">Saldo a favor:</span>{" "}
+              {formatCurrency(creditLedger?.balance ?? selected.creditBalance ?? 0)}
+            </p>
             <div className="space-y-1">
               <p className="font-semibold">Contactos</p>
               {selected.contacts.map((c: any) => (
@@ -528,6 +592,7 @@ export default function ResidentsPage() {
                 </div>
               ))}
             </div>
+            <CreditLedgerSection ledger={creditLedger} loading={creditLedgerLoading} />
           </div>
         ) : (
           <p className="text-sm text-slate-500">Selecciona un residente.</p>
@@ -612,6 +677,60 @@ export default function ResidentsPage() {
           </div>
         </form>
       </Modal>
+    </div>
+  );
+}
+
+function CreditLedgerSection({
+  ledger,
+  loading,
+}: {
+  ledger: CreditLedger | null;
+  loading: boolean;
+}) {
+  const balance = ledger?.balance ?? 0;
+  const movements = ledger?.movements ?? [];
+  return (
+    <div className="space-y-2 rounded-lg border border-slate-200 p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-slate-900">Estado de saldo a favor</p>
+        <Badge variant={balance > 0 ? "success" : "secondary"}>
+          {formatCurrency(balance)}
+        </Badge>
+      </div>
+      {loading ? (
+        <p className="text-sm text-slate-500">Cargando movimientos...</p>
+      ) : movements.length === 0 ? (
+        <p className="text-sm text-slate-500">Sin movimientos registrados.</p>
+      ) : (
+        <div className="max-h-64 overflow-auto rounded-lg border border-slate-100">
+          <Table>
+            <THead>
+              <tr>
+                <Th>Fecha</Th>
+                <Th>Detalle</Th>
+                <Th className="text-right">Importe</Th>
+              </tr>
+            </THead>
+            <TBody>
+              {movements.map((movement) => {
+                const isCredit = movement.type === "CREDIT";
+                const dateLabel = new Date(movement.createdAt).toLocaleDateString("es-AR");
+                return (
+                  <Tr key={movement.id}>
+                    <Td>{dateLabel}</Td>
+                    <Td>{movement.description}</Td>
+                    <Td className={`text-right ${isCredit ? "text-emerald-600" : "text-rose-600"}`}>
+                      {isCredit ? "+" : "-"}
+                      {formatCurrency(movement.amount)}
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }

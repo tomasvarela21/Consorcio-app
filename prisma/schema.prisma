@@ -32,6 +32,11 @@ enum PaymentStatus {
   CANCELLED
 }
 
+enum CreditMovementKind {
+  CREDIT
+  DEBIT
+}
+
 model Building {
   id          Int          @id @default(autoincrement())
   name        String
@@ -56,6 +61,7 @@ model Unit {
   contacts          Contact[]
   settlementCharges SettlementCharge[]
   payments          Payment[]
+  creditMovements   CreditMovement[]
 
   @@unique([buildingId, code])
   @@map("units")
@@ -88,6 +94,7 @@ model Settlement {
   building          Building           @relation(fields: [buildingId], references: [id])
   charges           SettlementCharge[]
   payments          Payment[]
+  creditMovements   CreditMovement[]
 
   @@unique([buildingId, month, year])
   @@map("settlements")
@@ -108,6 +115,7 @@ model SettlementCharge {
   lateFeePaidTotal     Decimal      @default(0) @db.Decimal(12, 2)
   settlement           Settlement   @relation(fields: [settlementId], references: [id])
   unit                 Unit         @relation(fields: [unitId], references: [id])
+  creditMovements      CreditMovement[]
 
   @@map("settlement_charges")
 }
@@ -126,8 +134,28 @@ model Payment {
   discountApplied Decimal  @default(0) @db.Decimal(12, 2)
   settlement    Settlement @relation(fields: [settlementId], references: [id])
   unit          Unit       @relation(fields: [unitId], references: [id])
+  creditMovements CreditMovement[]
 
   @@map("payments")
+}
+
+model CreditMovement {
+  id                 Int                 @id @default(autoincrement())
+  unitId             Int                 @map("unit_id")
+  paymentId          Int?                @map("payment_id")
+  settlementId       Int?                @map("settlement_id")
+  settlementChargeId Int?                @map("settlement_charge_id")
+  movementDate       DateTime            @default(now()) @map("movement_date")
+  amount             Decimal             @db.Decimal(12, 2)
+  movementType       CreditMovementKind  @map("movement_type")
+  description        String
+  unit               Unit                @relation(fields: [unitId], references: [id])
+  payment            Payment?            @relation(fields: [paymentId], references: [id])
+  settlement         Settlement?         @relation(fields: [settlementId], references: [id])
+  settlementCharge   SettlementCharge?   @relation(fields: [settlementChargeId], references: [id])
+
+  @@map("credit_movements")
+  @@index([unitId, movementDate])
 }
 
 model AdminUser {

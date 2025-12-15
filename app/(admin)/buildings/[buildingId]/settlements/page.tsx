@@ -65,6 +65,25 @@ type AccountHistory = {
   }>;
 } | null;
 
+type CreditUsageSummary = {
+  appliedToCurrent: number;
+  excedente: number;
+  appliedToMorosos: number;
+  appliedToUpcomingSettlements: number;
+  upcomingSettlementAllocations: Array<{
+    chargeId: number;
+    settlementId: number;
+    month: number;
+    year: number;
+    appliedAmount: number;
+    totalToPayBefore: number;
+    totalToPayAfter: number;
+  }>;
+  morosoPrevio: number;
+  morosoFinal: number;
+  creditBalance: number;
+};
+
 export default function SettlementsPage() {
   const params = useParams<{ buildingId: string }>();
   const buildingId = Number(params.buildingId);
@@ -96,27 +115,9 @@ export default function SettlementsPage() {
   const [payAmount, setPayAmount] = useState("");
   const [receiptNumber, setReceiptNumber] = useState("");
   const [paymentDate, setPaymentDate] = useState(today.toISOString().slice(0, 10));
-  const [paymentFeedback, setPaymentFeedback] = useState<
-    | {
-        appliedToCurrent: number;
-        excedente: number;
-        appliedToMorosos: number;
-        appliedToUpcomingSettlements: number;
-        upcomingSettlementAllocations: Array<{
-          chargeId: number;
-          settlementId: number;
-          month: number;
-          year: number;
-          appliedAmount: number;
-          totalToPayBefore: number;
-          totalToPayAfter: number;
-        }>;
-        morosoPrevio: number;
-        morosoFinal: number;
-        creditBalance: number;
-      }
-    | null
-  >(null);
+  const [creditSummary, setCreditSummary] = useState<CreditUsageSummary | null>(null);
+  const [creditPreview, setCreditPreview] = useState<CreditUsageSummary | null>(null);
+  const [creditSyncing, setCreditSyncing] = useState(false);
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountData, setAccountData] = useState<AccountHistory>(null);
@@ -173,54 +174,6 @@ export default function SettlementsPage() {
     ) : (
       <span>{formatCurrency(value)}</span>
     );
-
-  const renderPaymentFeedback = () => {
-    if (!paymentFeedback) return null;
-    return (
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-        <h4 className="mb-2 font-semibold text-slate-900">Resumen del pago</h4>
-        <div className="grid gap-1 text-slate-700 md:grid-cols-2">
-          <span>
-            Aplicado a liquidación: {formatCurrency(paymentFeedback.appliedToCurrent)}
-          </span>
-          <span>Excedente generado: {formatCurrency(paymentFeedback.excedente)}</span>
-          <span>
-            Aplicado a morosos: {formatCurrency(paymentFeedback.appliedToMorosos)}
-          </span>
-          <span>
-            Aplicado a futuras liquidaciones: {formatCurrency(
-              paymentFeedback.appliedToUpcomingSettlements,
-            )}
-          </span>
-          <span>Saldo moroso previo: {formatCurrency(paymentFeedback.morosoPrevio)}</span>
-          <span>Saldo moroso final: {formatCurrency(paymentFeedback.morosoFinal)}</span>
-          <span>Saldo a favor: {formatCurrency(paymentFeedback.creditBalance)}</span>
-        </div>
-        {paymentFeedback.upcomingSettlementAllocations.length > 0 && (
-          <div className="mt-2 text-xs text-slate-600">
-            <p className="font-semibold uppercase text-slate-500">
-              Adelantos aplicados
-            </p>
-            <div className="space-y-1">
-              {paymentFeedback.upcomingSettlementAllocations.map((alloc) => (
-                <div key={`settlement-${alloc.chargeId}`} className="rounded border border-dashed border-slate-200 p-2">
-                  <div className="flex justify-between">
-                    <span>
-                      {alloc.month}/{alloc.year}
-                    </span>
-                    <span>{formatCurrency(alloc.appliedAmount)}</span>
-                  </div>
-                  <p>
-                    Antes: {formatCurrency(alloc.totalToPayBefore)} · Después: {formatCurrency(alloc.totalToPayAfter)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const loadData = async () => {
     setLoading(true);
@@ -295,14 +248,55 @@ export default function SettlementsPage() {
     }
   };
 
-  const openPayModal = (charge: ChargeRow) => {
+  const openPayModal = async (charge: ChargeRow) => {
     setSelectedCharge(charge);
     const recommendation = computeDueForDate(charge, today);
     setPayAmount(recommendation.totalDue.toFixed(2));
     setReceiptNumber("");
-    setPaymentDate(today.toISOString().slice(0, 10));
+    const todayStr = today.toISOString().slice(0, 10);
+    setPaymentDate(todayStr);
     setOpenPayment(true);
-    setPaymentFeedback(null);
+    setCreditPreview(null);
+    if (!settlement) return;
+    setCreditSyncing(true);
+    try {
+      const res = await fetch(`/api/units/${charge.unitId}/credit/apply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settlementId: settlement.id,
+          referenceDate: todayStr,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (body.summary) {
+          setCreditPreview(body.summary);
+        }
+        if (body.charge) {
+          const updatedCharge = {
+            ...charge,
+            ...body.charge,
+          };
+          setSelectedCharge(updatedCharge);
+          const updatedRecommendation = computeDueForDate(updatedCharge, today);
+          setPayAmount(updatedRecommendation.totalDue.toFixed(2));
+        }
+        loadData();
+      } else {
+        toast.error(body.message ?? "No pudimos aplicar el saldo a favor");
+      }
+    } catch {
+      toast.error("No pudimos aplicar el saldo a favor");
+    } finally {
+      setCreditSyncing(false);
+    }
+  };
+
+  const closePaymentModal = () => {
+    setOpenPayment(false);
+    setCreditPreview(null);
+    setCreditSyncing(false);
   };
 
   const handlePayment = async (e: React.FormEvent) => {
@@ -321,10 +315,12 @@ export default function SettlementsPage() {
     });
     const body = await res.json().catch(() => ({}));
     if (res.ok) {
-      setPaymentFeedback(body.summary ?? null);
+      setCreditSummary(body.summary ?? null);
+      setCreditPreview(null);
+      setCreditSyncing(false);
       toast.success("Pago registrado");
       loadData();
-      setOpenPayment(false);
+      closePaymentModal();
       setSelectedCharge(null);
     } else {
       toast.error(body.message ?? "Error al registrar pago");
@@ -419,6 +415,9 @@ export default function SettlementsPage() {
           value={settlement?.percentageCoverage ?? 0}
           uncovered={settlement?.uncoveredAmount ?? 0}
         />
+      )}
+      {creditSummary && (
+        <CreditUsageAlert summary={creditSummary} onClose={() => setCreditSummary(null)} />
       )}
 
       {settlement && (
@@ -677,7 +676,7 @@ export default function SettlementsPage() {
 
       <Modal
         open={openPayment}
-        onClose={() => setOpenPayment(false)}
+        onClose={closePaymentModal}
         title={`Registrar pago ${selectedCharge?.unitCode ?? ""}`}
       >
         <form className="space-y-4" onSubmit={handlePayment}>
@@ -689,13 +688,22 @@ export default function SettlementsPage() {
           )}
           <Input label="Número de recibo" value={receiptNumber} onChange={(e) => setReceiptNumber(e.target.value)} required />
           <Input label="Fecha de pago" type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+          {creditSyncing && (
+            <div className="rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-600">
+              Aplicando saldo a favor disponible...
+            </div>
+          )}
+          {!creditSyncing && creditPreview && (
+            <CreditUsageDetails summary={creditPreview} />
+          )}
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" type="button" onClick={() => setOpenPayment(false)}>
+            <Button variant="secondary" type="button" onClick={closePaymentModal}>
               Cancelar
             </Button>
-            <Button type="submit">Confirmar pago</Button>
+            <Button type="submit" disabled={creditSyncing}>
+              Confirmar pago
+            </Button>
           </div>
-          {renderPaymentFeedback()}
         </form>
       </Modal>
 
@@ -751,6 +759,114 @@ export default function SettlementsPage() {
           <p className="text-sm text-slate-500">Cargando...</p>
         )}
       </Modal>
+    </div>
+  );
+}
+
+function CreditUsageDetails({ summary }: { summary: CreditUsageSummary }) {
+  const creditUsage = summary.appliedToMorosos + summary.appliedToUpcomingSettlements;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
+      <p className="mb-1 font-semibold text-slate-900">Saldo a favor aplicado automáticamente</p>
+      <div className="grid gap-1 text-xs text-slate-700 md:grid-cols-2">
+        <span>Aplicado a morosos: {formatCurrency(summary.appliedToMorosos)}</span>
+        <span>
+          Aplicado a liquidaciones: {formatCurrency(summary.appliedToUpcomingSettlements)}
+        </span>
+        <span>Saldo disponible después: {formatCurrency(summary.creditBalance)}</span>
+        <span>Total usado: {formatCurrency(creditUsage)}</span>
+      </div>
+      {summary.upcomingSettlementAllocations.length > 0 && (
+        <div className="mt-2 text-xs text-slate-600">
+          <p className="font-semibold uppercase text-slate-500">Adelantos aplicados</p>
+          <div className="space-y-1">
+            {summary.upcomingSettlementAllocations.map((alloc) => (
+              <div key={`credit-preview-${alloc.chargeId}`} className="rounded border border-dashed border-slate-200 p-2">
+                <div className="flex justify-between">
+                  <span>
+                    {alloc.month}/{alloc.year}
+                  </span>
+                  <span>{formatCurrency(alloc.appliedAmount)}</span>
+                </div>
+                <p>
+                  Antes: {formatCurrency(alloc.totalToPayBefore)} · Después: {formatCurrency(alloc.totalToPayAfter)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CreditUsageAlert({
+  summary,
+  onClose,
+}: {
+  summary: CreditUsageSummary;
+  onClose: () => void;
+}) {
+  const creditUsage = summary.appliedToMorosos + summary.appliedToUpcomingSettlements;
+  const hasNewCredit = summary.excedente > 0.0009;
+  const hasUsage = creditUsage > 0.0009;
+  const tone = hasNewCredit
+    ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+    : hasUsage
+      ? "border-sky-200 bg-sky-50 text-sky-900"
+      : "border-slate-200 bg-slate-50 text-slate-900";
+  const headline = hasNewCredit
+    ? `Saldo a favor generado: ${formatCurrency(summary.excedente)}`
+    : hasUsage
+      ? `Saldo a favor aplicado: ${formatCurrency(creditUsage)}`
+      : "El saldo a favor se mantiene sin cambios";
+
+  return (
+    <div className={`rounded-lg border px-4 py-3 text-sm ${tone}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="font-semibold">{headline}</p>
+          <p>
+            Aplicado a liquidación actual: {formatCurrency(summary.appliedToCurrent)} · Saldo disponible:{" "}
+            <span className="font-semibold">{formatCurrency(summary.creditBalance)}</span>
+          </p>
+        </div>
+        <Button size="sm" variant="ghost" onClick={onClose}>
+          Ocultar
+        </Button>
+      </div>
+      <div className="mt-3 grid gap-1 text-slate-700 md:grid-cols-2">
+        <span>Excedente generado: {formatCurrency(summary.excedente)}</span>
+        <span>Aplicado a morosos: {formatCurrency(summary.appliedToMorosos)}</span>
+        <span>
+          Aplicado a futuras liquidaciones: {formatCurrency(summary.appliedToUpcomingSettlements)}
+        </span>
+        <span>Saldo moroso previo: {formatCurrency(summary.morosoPrevio)}</span>
+        <span>Saldo moroso final: {formatCurrency(summary.morosoFinal)}</span>
+      </div>
+      {summary.upcomingSettlementAllocations.length > 0 && (
+        <div className="mt-3 text-xs text-slate-700">
+          <p className="font-semibold uppercase text-slate-500">Adelantos aplicados</p>
+          <div className="space-y-1">
+            {summary.upcomingSettlementAllocations.map((alloc) => (
+              <div
+                key={`credit-allocation-${alloc.chargeId}`}
+                className="rounded border border-dashed border-slate-200 p-2"
+              >
+                <div className="flex justify-between">
+                  <span>
+                    {alloc.month}/{alloc.year}
+                  </span>
+                  <span>{formatCurrency(alloc.appliedAmount)}</span>
+                </div>
+                <p>
+                  Antes: {formatCurrency(alloc.totalToPayBefore)} · Después: {formatCurrency(alloc.totalToPayAfter)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
