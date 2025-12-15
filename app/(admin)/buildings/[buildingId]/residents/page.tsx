@@ -694,7 +694,7 @@ function CreditLedgerSection({
     <div className="space-y-2 rounded-lg border border-slate-200 p-3">
       <div className="flex items-center justify-between">
         <p className="text-sm font-semibold text-slate-900">Estado de saldo a favor</p>
-        <Badge variant={balance > 0 ? "success" : "secondary"}>
+        <Badge variant={balance > 0 ? "success" : "default"}>
           {formatCurrency(balance)}
         </Badge>
       </div>

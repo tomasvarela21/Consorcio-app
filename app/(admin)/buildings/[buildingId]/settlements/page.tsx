@@ -831,7 +831,7 @@ function CreditUsageAlert({
             <span className="font-semibold">{formatCurrency(summary.creditBalance)}</span>
           </p>
         </div>
-        <Button size="sm" variant="ghost" onClick={onClose}>
+        <Button variant="ghost" onClick={onClose}>
           Ocultar
         </Button>
       </div>

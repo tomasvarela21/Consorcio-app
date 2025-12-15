@@ -54,7 +54,6 @@ export async function POST(
           partialPaymentsTotal: Number(charge.partialPaymentsTotal ?? 0),
           totalToPay: Number(charge.totalToPay ?? 0),
           status: charge.status,
-          discountApplied: Number(charge.discountApplied ?? 0),
         };
       }
     }

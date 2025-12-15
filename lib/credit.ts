@@ -18,16 +18,13 @@ export type CreditSyncResult = {
   creditBalance: number;
 };
 
-export async function applyAvailableCredit({
-  unitId,
-  referenceDate = new Date(),
-  client = prisma,
-}: {
-  unitId: number;
-  referenceDate?: Date;
-  client?: PrismaClientOrTx;
-}): Promise<CreditSyncResult> {
-  return client.$transaction(async (tx) => {
+async function applyCreditInternal(
+  tx: Prisma.TransactionClient,
+  {
+    unitId,
+    referenceDate,
+  }: { unitId: number; referenceDate: Date },
+): Promise<CreditSyncResult> {
     const unit = await tx.unit.findUnique({
       where: { id: unitId },
       select: { creditBalance: true },
@@ -75,5 +72,21 @@ export async function applyAvailableCredit({
       settlementAllocations: settlementApplication.allocations,
       creditBalance: remainingCredit,
     };
-  });
+}
+
+export async function applyAvailableCredit({
+  unitId,
+  referenceDate = new Date(),
+  client = prisma,
+}: {
+  unitId: number;
+  referenceDate?: Date;
+  client?: PrismaClientOrTx;
+}): Promise<CreditSyncResult> {
+  if ("$transaction" in client) {
+    return client.$transaction((tx) =>
+      applyCreditInternal(tx, { unitId, referenceDate }),
+    );
+  }
+  return applyCreditInternal(client, { unitId, referenceDate });
 }
