@@ -118,15 +118,14 @@ export async function POST(req: Request) {
         status,
       },
     });
-    const effectiveTotalBefore = Math.max(
+    const outstandingBefore = Math.max(
       0,
-      roundTwo(baseDebt - discountUsed),
+      roundTwo(effectiveTotal - totalPaidBefore),
     );
-    const deudaAntes = Math.max(
-      0,
-      roundTwo(effectiveTotalBefore - totalPaidBefore),
+    const outstandingAfter = Math.max(0, roundTwo(effectiveTotal - newPartial));
+    const pagoEfectivoLiquidacion = roundTwo(
+      outstandingBefore - outstandingAfter,
     );
-    const pagoEfectivoLiquidacion = roundTwo(deudaAntes - totalToPay);
     const excedentePagoActual = Math.max(
       0,
       roundTwo(amountNumber - pagoEfectivoLiquidacion),
