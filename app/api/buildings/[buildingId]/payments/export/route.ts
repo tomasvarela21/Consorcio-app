@@ -104,8 +104,8 @@ export async function GET(
     margins: { top: 50, bottom: 50, left: 50, right: 50 },
   });
 
-  const chunks: Uint8Array[] = [];
-  doc.on("data", (chunk) => chunks.push(chunk));
+  const chunks: Buffer[] = [];
+  doc.on("data", (chunk: Buffer) => chunks.push(chunk));
 
   const bufferPromise = new Promise<Buffer>((resolve, reject) => {
     doc.on("end", () => {
@@ -280,7 +280,17 @@ export async function GET(
   doc.end();
   const buffer = await bufferPromise;
 
-  return new NextResponse(buffer, {
+  const toArrayBuffer = (buf: Buffer) => {
+    const ab = new ArrayBuffer(buf.length);
+    const view = new Uint8Array(ab);
+    for (let i = 0; i < buf.length; i += 1) {
+      view[i] = buf[i];
+    }
+    return ab;
+  };
+
+  const arrayBuffer = toArrayBuffer(buffer);
+  return new NextResponse(arrayBuffer, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
