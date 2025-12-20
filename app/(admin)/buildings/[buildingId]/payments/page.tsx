@@ -8,6 +8,17 @@ import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import { Modal } from "@/components/ui/modal";
 import { formatCurrency } from "@/lib/format";
+import { Card } from "@/components/ui/card";
+
+const periodLabelFormatter = new Intl.DateTimeFormat("es-AR", {
+  month: "long",
+  year: "numeric",
+});
+
+const formatPeriodLabel = (month: number, year: number) => {
+  const formatted = periodLabelFormatter.format(new Date(year, month - 1, 1));
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+};
 
 type PaymentRow = {
   id: number;
@@ -20,6 +31,8 @@ type PaymentRow = {
   status: "COMPLETED" | "CANCELLED";
   canceledAt: string | null;
 };
+
+type PaymentPeriod = { settlementId: number; month: number; year: number };
 
 export default function PaymentsPage() {
   const params = useParams<{ buildingId: string }>();
@@ -37,6 +50,11 @@ export default function PaymentsPage() {
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [cancelTarget, setCancelTarget] = useState<PaymentRow | null>(null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [periods, setPeriods] = useState<PaymentPeriod[]>([]);
+  const [periodsLoading, setPeriodsLoading] = useState(false);
+  const [downloadPanelOpen, setDownloadPanelOpen] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState("");
+  const [downloading, setDownloading] = useState(false);
 
   const fetchPayments = async () => {
     setLoading(true);
@@ -67,6 +85,29 @@ export default function PaymentsPage() {
     fetchPayments();
   }, [buildingId]);
 
+  const fetchPeriods = async () => {
+    setPeriodsLoading(true);
+    const res = await fetch(`/api/buildings/${buildingId}/payments/periods`);
+    if (res.ok) {
+      const data: PaymentPeriod[] = await res.json();
+      setPeriods(data);
+      if (data.length > 0) {
+        const fallback = `${data[0].month}-${data[0].year}`;
+        setSelectedPeriod((prev) => (prev ? prev : fallback));
+      } else {
+        setSelectedPeriod("");
+      }
+    } else {
+      toast.error("No pudimos cargar los períodos con pagos");
+    }
+    setPeriodsLoading(false);
+  };
+
+  useEffect(() => {
+    setSelectedPeriod("");
+    fetchPeriods();
+  }, [buildingId]);
+
   const openDetailModal = (payment: PaymentRow) => {
     setSelected(payment);
     setOpenDetail(true);
@@ -75,6 +116,44 @@ export default function PaymentsPage() {
   const openCancelModal = (payment: PaymentRow) => {
     setCancelTarget(payment);
     setCancelModalOpen(true);
+  };
+
+  const handleDownload = async () => {
+    if (!selectedPeriod) {
+      toast.error("Selecciona un período");
+      return;
+    }
+    const [periodMonth, periodYear] = selectedPeriod.split("-").map(Number);
+    if (!periodMonth || !periodYear) {
+      toast.error("Período inválido");
+      return;
+    }
+    setDownloading(true);
+    try {
+      const res = await fetch(
+        `/api/buildings/${buildingId}/payments/export?month=${periodMonth}&year=${periodYear}`,
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message ?? "No se pudo descargar el listado");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pagos-${periodYear}-${String(periodMonth).padStart(2, "0")}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Descarga iniciada");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Error al descargar el listado",
+      );
+    } finally {
+      setDownloading(false);
+    }
   };
 
   const cancelPayment = async () => {
@@ -171,7 +250,60 @@ export default function PaymentsPage() {
           <Button variant="secondary" onClick={fetchPayments} className="h-9">
             Aplicar filtros
           </Button>
+          <Button
+            variant="primary"
+            onClick={() => setDownloadPanelOpen((prev) => !prev)}
+            className="h-9 transition hover:-translate-y-0.5"
+          >
+            Descargar listado
+          </Button>
         </div>
+        {downloadPanelOpen && (
+          <Card className="w-full border border-dashed border-slate-200/80 bg-slate-50/70">
+            <div className="flex flex-col gap-4 text-sm text-slate-600">
+              <p>
+                Descargá todos los pagos confirmados de un período en un PDF moderno y
+                fácil de compartir.
+              </p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col text-xs font-semibold text-slate-600">
+                  <label>Período</label>
+                  <select
+                    className="h-9 min-w-[180px] rounded-md border border-slate-300 px-2 text-sm"
+                    value={selectedPeriod}
+                    onChange={(e) => setSelectedPeriod(e.target.value)}
+                    disabled={periodsLoading}
+                  >
+                    {!periods.length && (
+                      <option value="">
+                        {periodsLoading
+                          ? "Buscando períodos..."
+                          : "Sin pagos confirmados"}
+                      </option>
+                    )}
+                    {periods.length > 0 && (
+                      <>
+                        <option value="">Seleccioná un período</option>
+                        {periods.map((p) => (
+                          <option key={p.settlementId} value={`${p.month}-${p.year}`}>
+                            {formatPeriodLabel(p.month, p.year)}
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                </div>
+                <Button
+                  onClick={handleDownload}
+                  disabled={!periods.length || !selectedPeriod}
+                  loading={downloading}
+                >
+                  Descargar PDF
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       <Table viewportClassName="max-h-[65vh] overflow-y-auto">
