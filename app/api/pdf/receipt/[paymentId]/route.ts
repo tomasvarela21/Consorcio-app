@@ -32,6 +32,13 @@ export async function GET(
     include: {
       settlement: { include: { building: true } },
       unit: { include: { contacts: true } },
+      creditMovements: {
+        where: {
+          movementType: "DEBIT",
+          paymentId: Number(paymentId),
+        },
+        select: { amount: true },
+      },
     },
   });
 
@@ -80,6 +87,13 @@ export async function GET(
     },
   ];
 
+  const creditDiscount = payment.creditMovements.reduce(
+    (total, movement) => total + Number(movement.amount),
+    0,
+  );
+  const totalOriginal = Math.max(0, numericAmount + creditDiscount);
+  const totalAfterCredit = Math.max(0, totalOriginal - creditDiscount);
+
   const PDFDocument = (await import("pdfkit")).default;
   const doc = new PDFDocument({ size: "A4", margin: 40 });
   const chunks: Buffer[] = [];
@@ -102,23 +116,49 @@ export async function GET(
     doc.font("Helvetica").text(value);
   };
 
-  doc.font("Helvetica-Bold").fontSize(14).text(payment.settlement.building.name);
-  doc.font("Helvetica").fontSize(10).text(payment.settlement.building.address);
-  const headerY = doc.page.margins.top;
+  const contentWidth =
+    doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const leftColumnWidth = contentWidth * 0.6;
+  const rightColumnWidth = contentWidth - leftColumnWidth;
+  const headerTop = doc.y;
+
+  doc
+    .font("Helvetica-Bold")
+    .fontSize(14)
+    .text(payment.settlement.building.name, doc.page.margins.left, headerTop, {
+      width: leftColumnWidth,
+    });
+  doc
+    .font("Helvetica")
+    .fontSize(10)
+    .text(payment.settlement.building.address, {
+      width: leftColumnWidth,
+    });
+  const leftColumnBottom = doc.y;
+
+  doc.y = headerTop;
   doc
     .font("Helvetica-Bold")
     .fontSize(16)
-    .text("RECIBO DE PAGO", doc.page.margins.left, headerY, { align: "right" });
+    .text("RECIBO DE PAGO", doc.page.margins.left + leftColumnWidth, doc.y, {
+      width: rightColumnWidth,
+      align: "right",
+    });
   doc
     .font("Helvetica")
     .fontSize(10)
     .text(`Nº Recibo: ${payment.receiptNumber}`, {
+      width: rightColumnWidth,
       align: "right",
     });
-  doc
-    .text(`Fecha: ${paymentDate.toLocaleDateString("es-AR")}`, {
-      align: "right",
-    });
+  doc.text(`Fecha: ${paymentDate.toLocaleDateString("es-AR")}`, {
+    width: rightColumnWidth,
+    align: "right",
+  });
+  const rightColumnBottom = doc.y;
+
+  doc.y = Math.max(leftColumnBottom, rightColumnBottom);
+  doc.x = doc.page.margins.left;
   doc.moveDown(0.5);
   drawLine();
 
@@ -134,6 +174,11 @@ export async function GET(
   doc.moveDown(0.3);
   doc.font("Helvetica").text(`Concepto: Expensas ${settlementPeriod}`);
   doc.text(`Importe pagado: ${formatCurrency(numericAmount)}`);
+  if (creditDiscount > 0) {
+    doc.text(
+      `Saldo a favor aplicado: ${formatCurrency(creditDiscount)} (ver totales)`,
+    );
+  }
 
   if (isDebtPayment) {
     doc.moveDown();
@@ -182,6 +227,15 @@ export async function GET(
     );
     doc.text(`Recargos por mora: ${formatCurrency(lateAmount)}`);
   }
+  doc.font("Helvetica").text(
+    `Total original: ${formatCurrency(totalOriginal)}`,
+  );
+  if (creditDiscount > 0) {
+    doc.text(
+      `Descuento por saldo a favor: -${formatCurrency(creditDiscount)}`,
+    );
+  }
+  doc.text(`Saldo a pagar: ${formatCurrency(totalAfterCredit)}`);
   doc
     .font("Helvetica-Bold")
     .text(`Total pagado: ${formatCurrency(numericAmount)}`);

@@ -18,7 +18,18 @@ export async function PATCH(
     return NextResponse.json({ message: "Pago inválido" }, { status: 400 });
   }
 
-  const payment = await prisma.payment.findUnique({ where: { id } });
+  const payment = await prisma.payment.findUnique({
+    where: { id },
+    include: {
+      creditMovements: {
+        where: {
+          movementType: "DEBIT",
+          paymentId: id,
+        },
+        select: { id: true, amount: true },
+      },
+    },
+  });
   if (!payment) {
     return NextResponse.json({ message: "Pago no encontrado" }, { status: 404 });
   }
@@ -73,6 +84,45 @@ export async function PATCH(
         canceledAt: new Date(),
       },
     });
+
+    let creditReversal = 0;
+    if (payment.creditMovements.length > 0) {
+      const debitIds = payment.creditMovements.map((movement) => movement.id);
+      creditReversal = roundTwo(
+        payment.creditMovements.reduce(
+          (total, movement) => total + Number(movement.amount),
+          0,
+        ),
+      );
+      if (creditReversal > 0) {
+        await tx.creditMovement.create({
+          data: {
+            unitId: payment.unitId,
+            paymentId: payment.id,
+            settlementId: payment.settlementId,
+            amount: creditReversal,
+            movementType: "CREDIT",
+            description: `Reintegro saldo a favor por anulación de pago ${payment.receiptNumber}`,
+          },
+        });
+      }
+      if (debitIds.length) {
+        await tx.creditMovement.deleteMany({
+          where: { id: { in: debitIds } },
+        });
+      }
+      if (creditReversal > 0) {
+        const unitRecord = await tx.unit.findUnique({
+          where: { id: payment.unitId },
+          select: { creditBalance: true },
+        });
+        const balanceBefore = Number(unitRecord?.creditBalance ?? 0);
+        await tx.unit.update({
+          where: { id: payment.unitId },
+          data: { creditBalance: roundTwo(balanceBefore + creditReversal) },
+        });
+      }
+    }
 
     const updatedCharge = await tx.settlementCharge.update({
       where: { id: charge.id },
