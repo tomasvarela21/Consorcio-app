@@ -122,6 +122,7 @@ export default function SettlementsPage() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountData, setAccountData] = useState<AccountHistory>(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "UNPAID" | "PAID">("ALL");
 
   const discountLabel = `${Math.round(EARLY_PAYMENT_DISCOUNT_RATE * 100)}%`;
 
@@ -215,12 +216,18 @@ export default function SettlementsPage() {
 
   const filteredCharges = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return charges;
-    return charges.filter((c) =>
-      c.unitCode.toLowerCase().includes(query) ||
-      (c.responsable ?? "").toLowerCase().includes(query),
-    );
-  }, [charges, search]);
+    return charges.filter((c) => {
+      const matchesQuery =
+        !query ||
+        c.unitCode.toLowerCase().includes(query) ||
+        (c.responsable ?? "").toLowerCase().includes(query);
+      const matchesStatus =
+        statusFilter === "ALL" ||
+        (statusFilter === "UNPAID" && (c.status === "PENDING" || c.status === "PARTIAL")) ||
+        (statusFilter === "PAID" && c.status === "PAID");
+      return matchesQuery && matchesStatus;
+    });
+  }, [charges, search, statusFilter]);
 
   const handleNewSettlement = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -394,6 +401,20 @@ export default function SettlementsPage() {
           </Button>
         </div>
         <div className="flex-1" />
+        <div className="flex items-end gap-2">
+          <div className="flex flex-col text-xs font-semibold text-slate-600">
+            <label>Estado</label>
+            <select
+              className="h-9 min-w-[11rem] rounded-md border border-slate-300 bg-white px-2 text-sm"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+            >
+              <option value="ALL">Todos</option>
+              <option value="UNPAID">Pendiente / Parcial</option>
+              <option value="PAID">Pagado</option>
+            </select>
+          </div>
+        </div>
         <div className="w-full max-w-xs">
           <Input
             label="Buscar unidad o responsable"
@@ -897,3 +918,5 @@ function CoverageNotice({ value, uncovered }: { value: number; uncovered: number
     </div>
   );
 }
+
+

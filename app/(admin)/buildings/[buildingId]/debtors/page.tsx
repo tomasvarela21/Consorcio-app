@@ -84,6 +84,7 @@ export default function DebtorsPage() {
   const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
   const [paying, setPaying] = useState(false);
   const [paymentLocked, setPaymentLocked] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -131,6 +132,35 @@ export default function DebtorsPage() {
     setOpenPay(true);
   };
 
+  const downloadPdf = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const res = await fetch(`/api/pdf/debtors/${buildingId}`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.message ?? "No pudimos generar el PDF");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const filename = `Listado Morosos (${new Date().toISOString().slice(0, 10)})`;
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${filename}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Descarga lista");
+    } catch (error) {
+      console.error(error);
+      toast.error("Error al descargar el PDF");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const submitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selected || paying || paymentLocked) return;
@@ -170,30 +200,34 @@ export default function DebtorsPage() {
     }
   };
 
-  const renderDetail = (period: MorosoPeriod) => (
-    <div key={period.settlementId} className="rounded-lg border border-slate-200 p-3 text-sm">
-      <div className="flex items-center justify-between font-semibold">
-        <span>
-          {period.month}/{period.year}
-        </span>
-        <span>{formatCurrency(period.pendingAmount)}</span>
+    const renderDetail = (period: MorosoPeriod) => {
+    const base = period.deudaPendiente;
+    const monthlyLate = base * (period.latePercentage / 100);
+    const totalLate = monthlyLate * period.monthsLate;
+    const totalDebt = base + totalLate;
+    return (
+      <div key={period.settlementId} className="rounded-lg border border-slate-200 p-3 text-sm">
+        <div className="flex items-center justify-between font-semibold">
+          <span>
+            {period.month}/{period.year}
+          </span>
+          <span>{formatCurrency(totalDebt)}</span>
+        </div>
+        <div className="grid gap-2 text-slate-600 md:grid-cols-2">
+          <span>Saldo original: {formatCurrency(period.originalDebt)}</span>
+          <span>Pagos parciales aplicados: {formatCurrency(period.partialPayments)}</span>
+          <span>Saldo base pendiente: {formatCurrency(base)}</span>
+          <span>% recargo mensual: {period.latePercentage}%</span>
+          <span>Recargo 1 mes (referencia): {formatCurrency(monthlyLate)}</span>
+          <span>Meses adeudados: {period.monthsLate}</span>
+          <span>Total recargo: {formatCurrency(totalLate)}</span>
+          <span className="col-span-2 font-semibold text-slate-900">
+            Total deuda (base + recargo): {formatCurrency(totalDebt)}
+          </span>
+        </div>
       </div>
-      <div className="grid gap-2 text-slate-600 md:grid-cols-2">
-        <span>Deuda original: {formatCurrency(period.originalDebt)}</span>
-        <span>Pagos parciales aplicados: {formatCurrency(period.partialPayments)}</span>
-        <span>Saldo base pendiente: {formatCurrency(period.deudaPendiente)}</span>
-        <span>Meses de atraso: {period.monthsLate}</span>
-        <span>
-          Recargo calculado ({period.latePercentage}% × {period.monthsLate}): {formatCurrency(period.lateAmount)}
-        </span>
-        <span>Recargo pendiente: {formatCurrency(period.lateAmountPending)}</span>
-        <span className="col-span-2 font-semibold text-slate-900">
-          Total a pagar: {formatCurrency(period.deudaPendiente + period.lateAmountPending)}
-        </span>
-      </div>
-    </div>
-  );
-
+    );
+  };
   const renderSummary = () => {
     if (!paymentSummary) return null;
     return (
@@ -287,6 +321,14 @@ export default function DebtorsPage() {
           value={responsibleFilter}
           onChange={(e) => setResponsibleFilter(e.target.value)}
         />
+        <Button
+          variant="secondary"
+          loading={downloading}
+          disabled={downloading || loading}
+          onClick={downloadPdf}
+        >
+          Descargar PDF
+        </Button>
       </div>
 
       <Table viewportClassName="max-h-[65vh] overflow-y-auto">
@@ -414,3 +456,5 @@ export default function DebtorsPage() {
     </div>
   );
 }
+
+
