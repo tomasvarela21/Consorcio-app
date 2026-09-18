@@ -81,6 +81,20 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ message: "Edificio no encontrado" }, { status: 404 });
   }
 
-  await prisma.building.delete({ where: { id: buildingIdNumber } });
+  const units = await prisma.unit.findMany({
+    where: { buildingId: buildingIdNumber },
+    select: { id: true },
+  });
+  const unitIds = units.map((u) => u.id);
+
+  await prisma.$transaction([
+    prisma.creditMovement.deleteMany({ where: { unitId: { in: unitIds } } }),
+    prisma.payment.deleteMany({ where: { unitId: { in: unitIds } } }),
+    prisma.settlementCharge.deleteMany({ where: { unitId: { in: unitIds } } }),
+    prisma.contact.deleteMany({ where: { unitId: { in: unitIds } } }),
+    prisma.unit.deleteMany({ where: { buildingId: buildingIdNumber } }),
+    prisma.settlement.deleteMany({ where: { buildingId: buildingIdNumber } }),
+    prisma.building.delete({ where: { id: buildingIdNumber } }),
+  ]);
   return NextResponse.json({ ok: true });
 }
